@@ -18,7 +18,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://pet-bmlywpedh-milos-projects-cf3a85f2.vercel.app",
-        ]
+        ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
