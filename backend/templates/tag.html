@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="sr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pet NFC</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background:#f6f7fb; }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 16px; }
+    .card { background:#fff; border-radius: 16px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+    .title { font-size: 20px; margin: 0 0 8px; }
+    .badge { display:inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .safe { background:#e8f7ee; }
+    .lost { background:#ffe9e9; }
+    .muted { color:#667085; }
+    .row { margin: 10px 0; }
+    .btn { display:block; text-align:center; padding: 14px 14px; border-radius: 12px; text-decoration:none; font-weight: 800; }
+    .btn-call { background:#111827; color:#fff; }
+    .btn-email { background:#eef2ff; color:#111827; margin-top:10px; }
+    .small { font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1 class="title">Pet NFC</h1>
+
+      {% if state == "UNKNOWN" %}
+        <div class="row"><span class="badge safe">NEPOZNATO</span></div>
+        <p class="muted">{{ message }}</p>
+
+      {% elif state == "REMOVED" %}
+        <div class="row"><span class="badge safe">NEAKTIVNO</span></div>
+        <p class="muted">{{ message }}</p>
+
+      {% elif state == "UNASSIGNED" %}
+        <div class="row"><span class="badge safe">NIJE DODELJENO</span></div>
+        <p class="muted">{{ message }}</p>
+
+      {% elif state == "SAFE" %}
+        <div class="row"><span class="badge safe">SAFE</span></div>
+        <p><b>{{ pet.name }}</b> ({{ pet.species }})</p>
+        <p class="muted">{{ message }}</p>
+        <p class="muted small">Kontakt se prikazuje samo ako je ljubimac prijavljen kao izgubljen.</p>
+
+      {% elif state == "DECEASED" %}
+        <div class="row"><span class="badge safe">INFO</span></div>
+        <p><b>{{ pet.name }}</b> ({{ pet.species }})</p>
+        <p class="muted">{{ message }}</p>
+
+      {% elif state == "LOST" %}
+        <div class="row"><span class="badge lost">LOST</span></div>
+        <p><b>{{ pet.name }}</b> ({{ pet.species }})</p>
+
+        <div class="row">
+          <p class="muted">Grad: <b>{{ contact.city }}</b></p>
+        </div>
+
+        {% if contact.phone %}
+          <a class="btn btn-call" href="tel:{{ contact.phone }}">Pozovi vlasnika</a>
+        {% endif %}
+
+        <a class="btn btn-email" href="mailto:{{ contact.owner_email }}">Pošalji email vlasniku</a>
+
+        <p class="muted small" style="margin-top:12px;">
+          Ako je ljubimac kod tebe, ostani na sigurnom mestu i pozovi vlasnika.
+        </p>
+
+      {% else %}
+        <p class="muted">Nepoznat prikaz.</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
