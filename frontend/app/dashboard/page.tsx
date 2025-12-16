@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+
 
 type PetRow = {
   pet_id: number;
@@ -157,7 +158,7 @@ export default function DashboardPage() {
                           NFC link:{" "}
                           <a
                             className="underline"
-                            href={`http://127.0.0.1:8000/t/${p.tag_id}`}
+                            href={`${API_BASE}/t/${p.tag_id}`}
                             target="_blank"
                             rel="noreferrer"
                           >
