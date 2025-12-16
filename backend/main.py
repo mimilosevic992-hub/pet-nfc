@@ -11,18 +11,16 @@ from db import Base, engine, SessionLocal
 from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
-app = FastAPI(title="Pet NFC API")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "https://pet-nfc.vercel.app",
         "https://pet-bmlywpedh-milos-projects-cf3a85f2.vercel.app",
-        ],
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    
 )
 
 templates = Jinja2Templates(directory="templates")
