@@ -1,3 +1,4 @@
+import os
 from datetime import date
 
 from fastapi import FastAPI, Depends, HTTPException, Request
@@ -8,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
+from enum import Enum
 from db import Base, engine, SessionLocal  # tvoj db.py
 from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User  # tvoj models.py
 from auth import hash_password, verify_password, create_access_token, get_current_user
@@ -70,6 +72,15 @@ class OwnerProfileAuthRequest(BaseModel):
 class LostToggleAuthRequest(BaseModel):
     lost: bool
 
+class AdminGenerateTagsRequest(BaseModel):
+    prefix: str = "PET"
+    start: int = 1
+    count: int = 100
+
+class TagStatus(str, Enum):
+    FREE = "FREE"
+    ACTIVE = "ACTIVE"
+    ASSIGNED = "ASSIGNED"
 
 # =========================
 # Basic
@@ -122,6 +133,82 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def me(current_user: User = Depends(get_current_user)):
     return {"email": current_user.email, "phone": current_user.phone, "city": current_user.city}
 
+# =========================
+# Admin 
+# =========================
+
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").lower()
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not ADMIN_EMAIL or current_user.email.lower() != ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Admin only.")
+    return current_user
+
+@app.post("/admin/tags/generate")
+def admin_generate_tags(
+    payload: AdminGenerateTagsRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    created = []
+    for i in range(payload.start, payload.start + payload.count):
+        tag_code = f"{payload.prefix}-{i:04d}"
+
+        exists = db.query(Tag).filter(Tag.tag_id == tag_code).first()
+        if exists:
+            continue
+
+        t = Tag(tag_id=tag_code, status=TagStatus.FREE, owner_email=None)
+        db.add(t)
+        created.append(tag_code)
+
+    db.commit()
+    return {"created_count": len(created), "created": created}
+
+@app.get("/admin/tags")
+def admin_list_tags(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    tags = db.query(Tag).order_by(Tag.id.desc()).limit(2000).all()
+    return [
+        {
+            "tag_id": t.tag_id,
+            "status": t.status,
+            "owner_email": t.owner_email,
+        }
+        for t in tags
+    ]
+
+@app.get("/admin/tags/{tag_id}")
+def admin_tag_detail(
+    tag_id: str,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    tag = db.query(Tag).filter(Tag.tag_id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag ne postoji.")
+
+    pet = db.query(Pet).filter(Pet.tag_id == tag.id).first()
+
+    return {
+        "tag_id": tag.tag_id,
+        "status": tag.status,
+        "owner_email": tag.owner_email,
+        "pet": (
+            {
+                "pet_id": pet.id,
+                "name": pet.name,
+                "species": pet.species,
+                "status": pet.status,
+            }
+            if pet
+            else None
+        ),
+    }
 
 # =========================
 # Owner profile (auth)
