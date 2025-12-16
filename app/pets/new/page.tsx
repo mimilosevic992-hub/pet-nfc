@@ -182,12 +182,32 @@ export default function NewPetPage() {
 
             <div>
               <label className="text-sm font-medium">Vrsta</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={species}
-                onChange={(e) => setSpecies(e.target.value)}
-                placeholder="Dog"
-              />
+
+              <div className="mt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSpecies("DOG")}
+                  className={`flex-1 rounded-xl border px-4 py-2 font-semibold ${
+                    species === "DOG"
+                      ? "bg-black text-white"
+                      : "bg-white hover:bg-gray-100"
+                  }`}
+                >
+                  🐶 Pas
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSpecies("CAT")}
+                  className={`flex-1 rounded-xl border px-4 py-2 font-semibold ${
+                    species === "CAT"
+                      ? "bg-black text-white"
+                      : "bg-white hover:bg-gray-100"
+                  }`}
+                >
+                  🐱 Mačka
+                </button>
+              </div>
             </div>
 
             <div>
