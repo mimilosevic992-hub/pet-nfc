@@ -3,33 +3,39 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
-export default function RegisterPage() {
+
+export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function doRegister() {
+  async function doLogin() {
     setLoading(true);
-    setResult(null);
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/auth/register`, {
+      // OAuth2 form-data: username + password
+      const form = new URLSearchParams();
+      form.append("username", email);
+      form.append("password", password);
+
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
       });
 
       if (!res.ok) throw new Error(await res.text());
 
-      setResult("Registracija uspešna. Sada se prijavi.");
-      setTimeout(() => router.push("/login"), 800);
+      const data = await res.json();
+      localStorage.setItem("petnfc_token", data.access_token);
+
+      router.push("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Greška");
     } finally {
@@ -40,7 +46,10 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow">
-        <h1 className="text-2xl font-bold">Registracija</h1>
+        <h1 className="text-2xl font-bold">Prijava</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Uloguj se da pristupiš dashboardu.
+        </p>
 
         <div className="mt-6 space-y-3">
           <div>
@@ -60,23 +69,17 @@ export default function RegisterPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="minimum 6 karaktera"
+              placeholder="••••••••"
             />
           </div>
 
           <button
-            onClick={doRegister}
+            onClick={doLogin}
             disabled={!email || !password || loading}
             className="w-full rounded-xl bg-black px-4 py-3 font-semibold text-white disabled:opacity-40"
           >
-            {loading ? "Kreiram..." : "Napravi nalog"}
+            {loading ? "Prijavljujem..." : "Prijavi se"}
           </button>
-
-          {result && (
-            <div className="rounded-xl bg-green-50 p-3 text-sm text-green-800">
-              {result}
-            </div>
-          )}
 
           {error && (
             <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
@@ -85,9 +88,9 @@ export default function RegisterPage() {
           )}
 
           <div className="pt-2 text-sm text-gray-600">
-            Već imaš nalog?{" "}
-            <a className="underline" href="/login">
-              Prijavi se
+            Nemaš nalog?{" "}
+            <a className="underline" href="/register">
+              Registruj se
             </a>
           </div>
         </div>
