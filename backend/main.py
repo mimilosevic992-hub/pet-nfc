@@ -11,6 +11,8 @@ from db import Base, engine, SessionLocal
 from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
+app = FastAPI(title="Pet NFC API")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
