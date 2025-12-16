@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 console.log("NEXT_PUBLIC_API_BASE =", process.env.NEXT_PUBLIC_API_BASE);
+const PUBLIC_TAG_BASE = "https://pet-nfc.onrender.com";
 
 type PetRow = {
   pet_id: number;
@@ -169,7 +170,7 @@ export default function DashboardPage() {
                           NFC link:{" "}
                           <a
                             className="underline"
-                            href={`${API_BASE}/t/${p.tag_id}`}
+                            href={`${PUBLIC_TAG_BASE}/t/${p.tag_id}`}
                             target="_blank"
                             rel="noreferrer"
                           >
