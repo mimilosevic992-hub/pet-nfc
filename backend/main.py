@@ -407,6 +407,13 @@ def public_tag_view(tag_id: str, db: Session = Depends(get_db)):
     tag = db.query(Tag).filter(Tag.tag_id == tag_id).first()
     if tag is None:
         return {"state": "UNKNOWN", "message": "Tag nije pronađen."}
+    
+    if tag.status == TagStatus.FREE:
+        return {
+            "state": "UNACTIVATED",
+            "message": "Ovaj Pet NFC tag još nije aktiviran.",
+            "cta": "Vlasnik? Uloguj se i aktiviraj tag."
+        }
 
     # ako postoji REMOVED u tvom TagStatus, ostavi:
     if hasattr(TagStatus, "REMOVED") and tag.status == TagStatus.REMOVED:

@@ -1,7 +1,9 @@
 import enum
-from sqlalchemy import Column, Integer, String, Enum, DateTime, func, ForeignKey
+from sqlalchemy import Column, Integer, String, Enum, DateTime, func, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from db import Base
+
+
 
 class TagStatus(str, enum.Enum):
     FREE = "FREE"
@@ -73,3 +75,4 @@ class User(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
