@@ -208,34 +208,6 @@ def admin_list_tags(
         for t in tags
     ]
 
-@app.get("/admin/tags/{tag_id}")
-def admin_tag_detail(
-    tag_id: str,
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    tag = db.query(Tag).filter(Tag.tag_id == tag_id).first()
-    if not tag:
-        raise HTTPException(status_code=404, detail="Tag ne postoji.")
-
-    pet = db.query(Pet).filter(Pet.tag_id == tag.id).first()
-
-    return {
-        "tag_id": tag.tag_id,
-        "status": tag.status,
-        "owner_email": tag.owner_email,
-        "pet": (
-            {
-                "pet_id": pet.id,
-                "name": pet.name,
-                "species": pet.species,
-                "status": pet.status,
-            }
-            if pet
-            else None
-        ),
-    }
-
 @app.get("/admin/tags/export")
 def admin_export_tags(
     status: str = "FREE",
@@ -269,6 +241,36 @@ def admin_export_tags(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/admin/tags/{tag_id}")
+def admin_tag_detail(
+    tag_id: str,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    tag = db.query(Tag).filter(Tag.tag_id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag ne postoji.")
+
+    pet = db.query(Pet).filter(Pet.tag_id == tag.id).first()
+
+    return {
+        "tag_id": tag.tag_id,
+        "status": tag.status,
+        "owner_email": tag.owner_email,
+        "pet": (
+            {
+                "pet_id": pet.id,
+                "name": pet.name,
+                "species": pet.species,
+                "status": pet.status,
+            }
+            if pet
+            else None
+        ),
+    }
+
 
 
 @app.get("/admin/me")
