@@ -176,7 +176,7 @@ export default function DashboardPage() {
                             target="_blank"
                             rel="noreferrer"
                           >
-                            {`${TAG_BASE}/t/${p.tag_id}`}
+                            /t/{p.tag_id}
                           </a>
                         </div>
                       )}
