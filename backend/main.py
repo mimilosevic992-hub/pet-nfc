@@ -83,6 +83,7 @@ class TagStatus(str, Enum):
     FREE = "FREE"
     ACTIVE = "ACTIVE"
     ASSIGNED = "ASSIGNED"
+    LOST_TAG = "LOST_TAG"
 
 # =========================
 # Basic
