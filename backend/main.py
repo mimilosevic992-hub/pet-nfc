@@ -9,6 +9,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
+import secrets
+import string
 from enum import Enum
 from db import Base, engine, SessionLocal  # tvoj db.py
 from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User  # tvoj models.py
@@ -146,6 +148,17 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Admin only.")
     return current_user
 
+ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # bez I,O,1,0 (lakše čitanje)
+
+def make_tag_code(prefix: str, length: int = 12) -> str:
+    rand = "".join(secrets.choice(ALPHABET) for _ in range(length))
+    return f"{prefix}-{rand}"
+
+class AdminGenerateTagsRequest(BaseModel):
+    prefix: str = "PET"
+    count: int = 100
+    length: int = 12  # 12-16 je super
+
 @app.post("/admin/tags/generate")
 def admin_generate_tags(
     payload: AdminGenerateTagsRequest,
@@ -153,8 +166,12 @@ def admin_generate_tags(
     db: Session = Depends(get_db),
 ):
     created = []
-    for i in range(payload.start, payload.start + payload.count):
-        tag_code = f"{payload.prefix}-{i:04d}"
+    attempts = 0
+    max_attempts = payload.count * 20  # da ne upadnemo u beskonačnu petlju
+
+    while len(created) < payload.count and attempts < max_attempts:
+        attempts += 1
+        tag_code = make_tag_code(payload.prefix, payload.length)
 
         exists = db.query(Tag).filter(Tag.tag_id == tag_code).first()
         if exists:
@@ -165,6 +182,10 @@ def admin_generate_tags(
         created.append(tag_code)
 
     db.commit()
+
+    if len(created) < payload.count:
+        raise HTTPException(status_code=500, detail="Nije uspelo generisanje dovoljno jedinstvenih tagova.")
+
     return {"created_count": len(created), "created": created}
 
 @app.get("/admin/tags")
@@ -244,21 +265,14 @@ def activate_tag_auth(
     db: Session = Depends(get_db),
 ):
     tag = db.query(Tag).filter(Tag.tag_id == payload.tag_id).first()
-
-    # DEV MODE: ako tag ne postoji, kreiraj ga kao FREE, pa aktiviraj.
-    # Kasnije (prod): ovo treba da bude 404 "tag ne postoji" (inventory).
     if tag is None:
-        tag = Tag(tag_id=payload.tag_id, status=TagStatus.FREE)
-        db.add(tag)
-        db.commit()
-        db.refresh(tag)
+        raise HTTPException(status_code=404, detail="Tag ne postoji (nije u inventaru).")
 
     if tag.status != TagStatus.FREE:
         raise HTTPException(status_code=400, detail=f"Tag nije FREE (trenutno: {tag.status}).")
 
     tag.status = TagStatus.ACTIVE
     tag.owner_email = current_user.email
-    db.add(tag)
     db.commit()
     db.refresh(tag)
 
