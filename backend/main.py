@@ -3,7 +3,7 @@ from datetime import date
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, Field
@@ -451,6 +451,52 @@ def public_tag_view(tag_id: str, db: Session = Depends(get_db)):
             "cta": "Kontaktiraj vlasnika",
         }
 
+@app.get("/t/{tag_id}/state")
+def tag_state(tag_id: str, db: Session = Depends(get_db)):
+    tag = db.query(Tag).filter(Tag.tag_id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag ne postoji.")
+
+    # 1) FREE => nije aktiviran
+    if tag.status == TagStatus.FREE:
+        return {
+            "state": "UNACTIVATED",
+            "message": "Ovaj tag nije aktiviran. Vlasnik treba da ga aktivira u aplikaciji.",
+        }
+
+    # 2) ACTIVE => aktiviran ali još nema ljubimca
+    if tag.status == TagStatus.ACTIVE:
+        return {
+            "state": "UNASSIGNED",
+            "message": "Tag je aktiviran, ali ljubimac još nije dodat.",
+        }
+
+    # 3) ASSIGNED => ima ljubimca
+    pet = db.query(Pet).filter(Pet.tag_id == tag.id).first()
+    if not pet:
+        # sigurnosna mreža (ako je stanje nekonzistentno)
+        return {"state": "UNKNOWN", "message": "Tag je u sistemu, ali nije vezan za ljubimca."}
+
+    # vlasnik (kontakt) iz users tabele (po email-u)
+    owner = db.query(User).filter(User.email == pet.owner_email).first()
+
+    if pet.status == PetStatus.LOST:
+        return {
+            "state": "LOST",
+            "pet": {"name": pet.name, "species": pet.species},
+            "contact": {
+                "owner_email": owner.email if owner else pet.owner_email,
+                "phone": owner.phone if owner else None,
+                "city": owner.city if owner else None,
+            },
+            "cta": "Kontaktiraj vlasnika",
+        }
+
+    return {
+        "state": "SAFE",
+        "pet": {"name": pet.name, "species": pet.species},
+        "message": "Ljubimac nije prijavljen kao izgubljen.",
+    }
 
 @app.get("/t/{tag_id}", response_class=HTMLResponse)
 def public_tag_page(tag_id: str, request: Request, db: Session = Depends(get_db)):
