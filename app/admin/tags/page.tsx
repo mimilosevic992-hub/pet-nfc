@@ -45,6 +45,16 @@ export default function AdminTagsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
 
+  // ✅ FRONTEND public URL (Vercel) - ne API
+  function publicUrl(tagId: string) {
+    if (typeof window === "undefined") return `/t/${tagId}`;
+    return `${window.location.origin}/t/${tagId}`;
+  }
+
+  async function copy(text: string) {
+    await navigator.clipboard.writeText(text);
+  }
+
   async function load() {
     setLoading(true);
     setErr(null);
@@ -96,14 +106,6 @@ export default function AdminTagsPage() {
     setDetail(null);
     setDetailErr(null);
     setDetailLoading(false);
-  }
-
-  function publicUrl(tagId: string) {
-    return `${API_BASE}/t/${tagId}`;
-  }
-
-  async function copy(text: string) {
-    await navigator.clipboard.writeText(text);
   }
 
   // Admin guard + initial load
@@ -352,16 +354,13 @@ export default function AdminTagsPage() {
                       {detail.pet ? (
                         <div className="mt-2 space-y-1">
                           <div>
-                            <span className="text-gray-500">Ime:</span>{" "}
-                            <b>{detail.pet.name}</b>
+                            <span className="text-gray-500">Ime:</span> <b>{detail.pet.name}</b>
                           </div>
                           <div>
-                            <span className="text-gray-500">Vrsta:</span>{" "}
-                            <b>{detail.pet.species}</b>
+                            <span className="text-gray-500">Vrsta:</span> <b>{detail.pet.species}</b>
                           </div>
                           <div>
-                            <span className="text-gray-500">Status:</span>{" "}
-                            <b>{detail.pet.status}</b>
+                            <span className="text-gray-500">Status:</span> <b>{detail.pet.status}</b>
                           </div>
                         </div>
                       ) : (
