@@ -34,9 +34,7 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
       setData(null);
 
       try {
-        const res = await fetch(`${API_BASE}/t/${encodeURIComponent(tagId)}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(`${API_BASE}/t/${encodeURIComponent(tagId)}/state`, { cache: "no-store" });
 
         // Ako backend vraća 404 za nepostojeći tag:
         if (res.status === 404) {
