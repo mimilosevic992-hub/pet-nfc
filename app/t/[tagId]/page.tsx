@@ -5,31 +5,24 @@ import { useParams } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
 
-type StateResponse = {
-  state: "UNACTIVATED" | "UNASSIGNED" | "SAFE" | "LOST";
+type Unactivated = { state: "UNACTIVATED"; message: string };
+type Unassigned = { state: "UNASSIGNED"; message: string };
+type SafeOrLost = {
+  state: "SAFE" | "LOST";
+  pet: { name: string; species: string; status: "ACTIVE" | "LOST" | "DECEASED" };
   message?: string;
-
-  pet?: {
-    name?: string;
-    species?: string;
-    status?: string;
-  };
-
-  owner?: {
-    email?: string | null;
-    phone?: string | null;
-    city?: string | null;
-  };
-
-  email?: string | null;
-  phone?: string | null;
-  city?: string | null;
+  contact?: { owner_email?: string | null; phone?: string | null; city?: string | null };
 };
+
+type StateResponse = Unactivated | Unassigned | SafeOrLost;
+
+function isSafeOrLost(x: StateResponse): x is SafeOrLost {
+  return x.state === "SAFE" || x.state === "LOST";
+}
 
 export default function PublicTagPage() {
   const params = useParams();
 
-  // useParams može vratiti string | string[] | undefined
   const raw = params?.tagId;
   const tagId = useMemo(() => {
     if (!raw) return null;
@@ -81,20 +74,23 @@ export default function PublicTagPage() {
     };
   }, [tagId]);
 
-  const state = data?.state;
-
-  const phone = data?.owner?.phone ?? data?.phone ?? null;
-  const email = data?.owner?.email ?? data?.email ?? null;
-
   const badge = useMemo(() => {
-    if (!state) return null;
+    if (!data) return null;
     const base = "inline-block rounded-full px-3 py-1 text-xs font-bold";
-    if (state === "LOST") return <span className={`${base} bg-red-100 text-red-800`}>LOST</span>;
-    if (state === "SAFE") return <span className={`${base} bg-green-100 text-green-800`}>SAFE</span>;
-    if (state === "UNASSIGNED")
+    if (data.state === "LOST") return <span className={`${base} bg-red-100 text-red-800`}>LOST</span>;
+    if (data.state === "SAFE") return <span className={`${base} bg-green-100 text-green-800`}>SAFE</span>;
+    if (data.state === "UNASSIGNED")
       return <span className={`${base} bg-yellow-100 text-yellow-800`}>NIJE DODELJENO</span>;
     return <span className={`${base} bg-gray-100 text-gray-700`}>NIJE AKTIVIRAN</span>;
-  }, [state]);
+  }, [data]);
+
+  // kontakt samo ako je SAFE/LOST
+  const phone = data && isSafeOrLost(data) ? (data.contact?.phone ?? null) : null;
+  const email = data && isSafeOrLost(data) ? (data.contact?.owner_email ?? null) : null;
+  const city = data && isSafeOrLost(data) ? (data.contact?.city ?? null) : null;
+
+  // LOST status samo ako je SAFE/LOST
+  const isLost = data && isSafeOrLost(data) ? data.pet.status === "LOST" : false;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -118,84 +114,73 @@ export default function PublicTagPage() {
               <div className="flex items-center gap-2">{badge}</div>
 
               <div className="rounded-xl border p-4">
-                {state === "UNACTIVATED" && (
+                {data.state === "UNACTIVATED" && (
                   <>
                     <div className="font-semibold">Tag nije aktiviran</div>
-                    <p className="mt-2 text-sm text-gray-700">
-                      {data.message ??
-                        "Ovaj tag nije aktiviran. Vlasnik treba da ga aktivira u aplikaciji."}
-                    </p>
+                    <p className="mt-2 text-sm text-gray-700">{data.message}</p>
                   </>
                 )}
 
-                {state === "UNASSIGNED" && (
+                {data.state === "UNASSIGNED" && (
                   <>
                     <div className="font-semibold">Tag je aktivan, ali nije dodeljen ljubimcu</div>
-                    <p className="mt-2 text-sm text-gray-700">
-                      {data.message ?? "Vlasnik još nije povezao ovaj tag sa profilom ljubimca."}
-                    </p>
+                    <p className="mt-2 text-sm text-gray-700">{data.message}</p>
                   </>
                 )}
 
-                {(state === "SAFE" || state === "LOST") && (
+                {isSafeOrLost(data) && (
                   <>
                     <div className="font-semibold">
-                      {data.pet?.name ? (
-                        <>
-                          {data.pet.name}{" "}
-                          {data.pet.species ? (
-                            <span className="text-gray-500">({data.pet.species})</span>
-                          ) : null}
-                        </>
-                      ) : (
-                        "Profil ljubimca"
-                      )}
+                      {data.pet.name}{" "}
+                      <span className="text-gray-500">({data.pet.species})</span>
                     </div>
 
                     <div className="mt-2 text-sm text-gray-700">
-                      Status: <b>{state === "LOST" ? "LOST" : "SAFE"}</b>
+                      Status: <b>{data.pet.status === "LOST" ? "LOST" : "SAFE"}</b>
                     </div>
                   </>
                 )}
               </div>
 
-              {state === "SAFE" && (
-                <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+              {/* Kontakt sekcija */}
+              {isSafeOrLost(data) && !isLost && (
+                <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
                   Ljubimac nije prijavljen kao izgubljen.
-                  <br />
-                  Kontakt se prikazuje samo ako je ljubimac prijavljen kao izgubljen.
+                  <div className="mt-1 text-gray-600">
+                    Kontakt se prikazuje samo ako je ljubimac prijavljen kao izgubljen.
+                  </div>
                 </div>
               )}
 
-              {state === "LOST" && (
-                <div className="space-y-3">
-                  <div className="rounded-xl bg-red-50 p-4 text-sm text-red-800">
-                    Ljubimac je prijavljen kao izgubljen. Kontaktiraj vlasnika:
-                  </div>
+              {isSafeOrLost(data) && isLost && (
+                <div className="space-y-2">
+                  <div className="text-sm text-gray-700 font-semibold">Kontakt vlasnika (LOST):</div>
 
                   {phone ? (
                     <a
                       className="block rounded-xl bg-black px-4 py-3 text-center font-semibold text-white"
                       href={`tel:${phone}`}
                     >
-                      Pozovi vlasnika
+                      Pozovi: {phone}
                     </a>
                   ) : null}
 
                   {email ? (
                     <a
-                      className="block rounded-xl border px-4 py-3 text-center font-semibold hover:bg-gray-100"
-                      href={`mailto:${email}?subject=Pronađen ljubimac (${tagId})`}
+                      className="block rounded-xl border px-4 py-3 text-center font-semibold"
+                      href={`mailto:${email}`}
                     >
-                      Pošalji email
+                      Pošalji email: {email}
                     </a>
                   ) : null}
 
                   {!phone && !email && (
-                    <div className="rounded-xl bg-yellow-50 p-4 text-sm text-yellow-900">
+                    <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
                       Kontakt podaci nisu dostupni za ovaj profil.
                     </div>
                   )}
+
+                  {city ? <div className="text-xs text-gray-600">Grad: {city}</div> : null}
                 </div>
               )}
             </>
