@@ -140,13 +140,15 @@ def me(current_user: User = Depends(get_current_user)):
 # Admin 
 # =========================
 
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").lower()
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip().lower()
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    if not ADMIN_EMAIL or current_user.email.lower() != ADMIN_EMAIL:
+
+    if not ADMIN_EMAIL or current_user.email.strip().lower() != ADMIN_EMAIL:
         raise HTTPException(status_code=403, detail="Admin only.")
+
     return current_user
 
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # bez I,O,1,0 (lakše čitanje)
@@ -231,6 +233,10 @@ def admin_tag_detail(
             else None
         ),
     }
+
+@app.get("/admin/me")
+def admin_me(admin: User = Depends(require_admin)):
+    return {"is_admin": True, "email": admin.email}
 
 # =========================
 # Owner profile (auth)
