@@ -16,12 +16,6 @@ export default function AdminPage() {
   const [result, setResult] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
-  // auth + admin guard (UX)
-  useEffect(() => {
-    const token = localStorage.getItem("petnfc_token");
-    if (!token) router.replace("/login");
-  }, [router]);
-
   async function generateTags() {
     setLoading(true);
     setErr(null);
@@ -37,11 +31,7 @@ export default function AdminPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          prefix,
-          count,
-          length,
-        }),
+        body: JSON.stringify({ prefix, count, length }),
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -54,6 +44,25 @@ export default function AdminPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const token = localStorage.getItem("petnfc_token");
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/admin/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(await res.text());
+      } catch {
+        router.replace("/dashboard");
+      }
+    })();
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

@@ -17,13 +17,6 @@ export default function AdminTagsPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    const token = localStorage.getItem("petnfc_token");
-    if (!token) router.replace("/login");
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function load() {
     setLoading(true);
     setErr(null);
@@ -37,7 +30,7 @@ export default function AdminTagsPage() {
       });
       if (!res.ok) throw new Error(await res.text());
 
-      const data = await res.json();
+      const data = (await res.json()) as TagRow[];
       setTags(data);
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
@@ -45,6 +38,27 @@ export default function AdminTagsPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const token = localStorage.getItem("petnfc_token");
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/admin/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        await load();
+      } catch {
+        router.replace("/dashboard");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -60,9 +74,20 @@ export default function AdminTagsPage() {
             </a>
           </div>
 
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={load}
+              disabled={loading}
+              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {loading ? "Učitavam..." : "Osveži listu"}
+            </button>
+          </div>
+
           {loading && <p className="mt-4 text-sm text-gray-600">Učitavam…</p>}
+
           {err && (
-            <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">
+            <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
               {err}
             </div>
           )}
