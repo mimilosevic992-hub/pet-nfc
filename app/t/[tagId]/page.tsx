@@ -90,7 +90,7 @@ export default function PublicTagPage() {
   const city = data && isSafeOrLost(data) ? (data.contact?.city ?? null) : null;
 
   // LOST status samo ako je SAFE/LOST
-  const isLost = data && isSafeOrLost(data) ? data.pet.status === "LOST" : false;
+  const isLost = data?.state === "LOST";
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -136,7 +136,7 @@ export default function PublicTagPage() {
                     </div>
 
                     <div className="mt-2 text-sm text-gray-700">
-                      Status: <b>{data.pet.status === "LOST" ? "LOST" : "SAFE"}</b>
+                      Status: <b>{data.state === "LOST" ? "LOST" : "SAFE"}</b>
                     </div>
                   </>
                 )}
