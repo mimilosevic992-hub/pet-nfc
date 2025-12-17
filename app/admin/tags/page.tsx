@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
@@ -11,11 +11,39 @@ type TagRow = {
   owner_email: string | null;
 };
 
+type TagDetail = {
+  tag_id: string;
+  status: string;
+  owner_email: string | null;
+  pet: null | {
+    pet_id: number;
+    name: string;
+    species: string;
+    status: string;
+  };
+};
+
+const STATUS_OPTIONS = ["ALL", "FREE", "ACTIVE", "ASSIGNED", "LOST_TAG"] as const;
+type StatusFilter = (typeof STATUS_OPTIONS)[number];
+
+function normalize(s: string) {
+  return s.trim().toLowerCase();
+}
+
 export default function AdminTagsPage() {
   const router = useRouter();
+
   const [tags, setTags] = useState<TagRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("ALL");
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<TagDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailErr, setDetailErr] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -39,6 +67,46 @@ export default function AdminTagsPage() {
     }
   }
 
+  async function openDetail(tagId: string) {
+    setSelectedId(tagId);
+    setDetail(null);
+    setDetailErr(null);
+    setDetailLoading(true);
+
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) throw new Error("Nisi ulogovan.");
+
+      const res = await fetch(`${API_BASE}/admin/tags/${encodeURIComponent(tagId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      const data = (await res.json()) as TagDetail;
+      setDetail(data);
+    } catch (e: any) {
+      setDetailErr(e?.message ?? "Greška");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function closeDetail() {
+    setSelectedId(null);
+    setDetail(null);
+    setDetailErr(null);
+    setDetailLoading(false);
+  }
+
+  function publicUrl(tagId: string) {
+    return `${API_BASE}/t/${tagId}`;
+  }
+
+  async function copy(text: string) {
+    await navigator.clipboard.writeText(text);
+  }
+
+  // Admin guard + initial load
   useEffect(() => {
     const token = localStorage.getItem("petnfc_token");
     if (!token) {
@@ -60,39 +128,105 @@ export default function AdminTagsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const filtered = useMemo(() => {
+    const nq = normalize(q);
+    return tags
+      .filter((t) => (status === "ALL" ? true : t.status === status))
+      .filter((t) => (nq ? normalize(t.tag_id).includes(nq) : true));
+  }, [tags, q, status]);
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = { ALL: tags.length };
+    for (const s of STATUS_OPTIONS) map[s] = 0;
+    map.ALL = tags.length;
+    for (const t of tags) map[t.status] = (map[t.status] || 0) + 1;
+    return map;
+  }, [tags]);
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-4xl space-y-4">
+      <div className="mx-auto max-w-5xl space-y-4">
         <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Inventar tagova</h1>
-            <a
-              href="/admin"
-              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
-            >
-              ← Nazad
-            </a>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Inventar tagova</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Search + filter + detalji + copy link za programiranje NFC-a.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <a
+                href="/admin"
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+              >
+                ← Admin
+              </a>
+              <button
+                onClick={load}
+                disabled={loading}
+                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {loading ? "Učitavam..." : "Osveži"}
+              </button>
+            </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-3">
-            <button
-              onClick={load}
-              disabled={loading}
-              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              {loading ? "Učitavam..." : "Osveži listu"}
-            </button>
-          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <label className="text-sm font-medium">Pretraga (tag id)</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                placeholder="npr. PET-ABCD..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
 
-          {loading && <p className="mt-4 text-sm text-gray-600">Učitavam…</p>}
+            <div>
+              <label className="text-sm font-medium">Status filter</label>
+              <select
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as StatusFilter)}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "ALL" ? `ALL (${counts.ALL ?? 0})` : `${s} (${counts[s] ?? 0})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {err && (
             <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
               {err}
             </div>
           )}
+        </div>
 
-          {!loading && tags.length > 0 && (
+        <div className="rounded-2xl bg-white p-6 shadow">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold">
+              Rezultati: <span className="text-gray-600">{filtered.length}</span>
+            </h2>
+
+            <button
+              onClick={() => copy(filtered.map((t) => publicUrl(t.tag_id)).join("\n"))}
+              disabled={filtered.length === 0}
+              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
+              title="Copy sve public URL-ove iz filtera"
+            >
+              Copy URLs (filter)
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="mt-4 text-sm text-gray-600">Učitavam…</p>
+          ) : filtered.length === 0 ? (
+            <p className="mt-4 text-sm text-gray-600">Nema rezultata.</p>
+          ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -100,11 +234,12 @@ export default function AdminTagsPage() {
                     <th className="py-2">Tag</th>
                     <th>Status</th>
                     <th>Vlasnik</th>
-                    <th>Link</th>
+                    <th>Public</th>
+                    <th className="text-right">Akcije</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tags.map((t) => (
+                  {filtered.map((t) => (
                     <tr key={t.tag_id} className="border-b last:border-0">
                       <td className="py-2 font-mono">{t.tag_id}</td>
                       <td>{t.status}</td>
@@ -112,12 +247,34 @@ export default function AdminTagsPage() {
                       <td>
                         <a
                           className="underline"
-                          href={`${API_BASE}/t/${t.tag_id}`}
+                          href={publicUrl(t.tag_id)}
                           target="_blank"
                           rel="noreferrer"
                         >
                           Open
                         </a>
+                      </td>
+                      <td className="py-2 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => copy(t.tag_id)}
+                            className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-gray-100"
+                          >
+                            Copy ID
+                          </button>
+                          <button
+                            onClick={() => copy(publicUrl(t.tag_id))}
+                            className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-gray-100"
+                          >
+                            Copy URL
+                          </button>
+                          <button
+                            onClick={() => openDetail(t.tag_id)}
+                            className="rounded-xl bg-black px-3 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Details
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -125,11 +282,102 @@ export default function AdminTagsPage() {
               </table>
             </div>
           )}
-
-          {!loading && tags.length === 0 && (
-            <p className="mt-4 text-sm text-gray-600">Nema tagova.</p>
-          )}
         </div>
+
+        {/* Modal */}
+        {selectedId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm text-gray-600">Tag</div>
+                  <div className="text-lg font-bold font-mono">{selectedId}</div>
+                </div>
+
+                <button
+                  onClick={closeDetail}
+                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+                >
+                  Zatvori
+                </button>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => copy(selectedId)}
+                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+                >
+                  Copy ID
+                </button>
+                <button
+                  onClick={() => copy(publicUrl(selectedId))}
+                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+                >
+                  Copy Public URL
+                </button>
+                <a
+                  href={publicUrl(selectedId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white"
+                >
+                  Open public
+                </a>
+              </div>
+
+              <div className="mt-4 rounded-xl bg-gray-50 p-4">
+                {detailLoading && <p className="text-sm text-gray-600">Učitavam detalje…</p>}
+
+                {detailErr && (
+                  <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
+                    {detailErr}
+                  </div>
+                )}
+
+                {detail && (
+                  <div className="space-y-3 text-sm">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <div className="text-gray-500">Status</div>
+                        <div className="font-semibold">{detail.status}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500">Owner</div>
+                        <div className="font-semibold">{detail.owner_email ?? "-"}</div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3 border">
+                      <div className="font-semibold">Ljubimac</div>
+                      {detail.pet ? (
+                        <div className="mt-2 space-y-1">
+                          <div>
+                            <span className="text-gray-500">Ime:</span>{" "}
+                            <b>{detail.pet.name}</b>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Vrsta:</span>{" "}
+                            <b>{detail.pet.species}</b>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Status:</span>{" "}
+                            <b>{detail.pet.status}</b>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-gray-600">Nije dodeljen ljubimcu.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 text-xs text-gray-500">
+                Napomena: security je na backend-u (admin only). Frontend ovde radi UX guard + redirect.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
