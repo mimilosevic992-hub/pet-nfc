@@ -1,51 +1,48 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
 
-type StateResponse =
-  | { state: "UNACTIVATED"; message: string }
-  | { state: "UNASSIGNED"; message: string }
-  | {
-      state: "SAFE" | "LOST";
-      pet: { name: string; species: string; status: "ACTIVE" | "LOST" | "DECEASED" };
-      owner?: { phone?: string | null; email?: string | null };
-      message?: string;
-    };
+type StateResponse = {
+  state: "UNACTIVATED" | "UNASSIGNED" | "SAFE" | "LOST";
+  message?: string;
 
-export default function PublicTagPage() {
-  const params = useParams();
+  // OPTIONAL: zavisi šta backend šalje
+  tag_id?: string;
 
-  const tagId = useMemo(() => {
-    const raw = (params as any)?.tagId;
-    if (!raw) return "";
-    const v = Array.isArray(raw) ? raw[0] : raw;
-    try {
-      return decodeURIComponent(v);
-    } catch {
-      return String(v);
-    }
-  }, [params]);
+  pet?: {
+    name?: string;
+    species?: string;
+    status?: string;
+  };
 
+  owner?: {
+    email?: string | null;
+    phone?: string | null;
+    city?: string | null;
+  };
+
+  // ako šalješ direktno:
+  email?: string | null;
+  phone?: string | null;
+  city?: string | null;
+};
+
+export default function PublicTagPage({ params }: { params: { tagId: string } }) {
+  const tagId = decodeURIComponent(params.tagId);
+
+  const [data, setData] = useState<StateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [data, setData] = useState<StateResponse | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    let alive = true;
 
-    async function run() {
+    (async () => {
       setLoading(true);
       setErr(null);
       setData(null);
-
-      if (!tagId) {
-        setErr("Neispravan link (tagId nedostaje).");
-        setLoading(false);
-        return;
-      }
 
       try {
         const res = await fetch(`${API_BASE}/t/${encodeURIComponent(tagId)}/state`, {
@@ -53,140 +50,151 @@ export default function PublicTagPage() {
         });
 
         const text = await res.text();
+        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
-        let json: any;
-        try {
-          json = JSON.parse(text);
-        } catch {
-          throw new Error(text || "Server nije vratio validan JSON.");
-        }
+        // backend vraća JSON
+        const json = JSON.parse(text) as StateResponse;
 
-        if (!res.ok) {
-          throw new Error(json?.detail || json?.message || `Greška: ${res.status}`);
-        }
-
-        if (!cancelled) setData(json as StateResponse);
+        if (!alive) return;
+        setData(json);
       } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Greška");
+        if (!alive) return;
+        setErr(e?.message ?? "Greška");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!alive) return;
+        setLoading(false);
       }
-    }
+    })();
 
-    run();
     return () => {
-      cancelled = true;
+      alive = false;
     };
   }, [tagId]);
 
+  const state = data?.state;
+
+  const petName = data?.pet?.name ?? "";
+  const petSpecies = data?.pet?.species ?? "";
+  const petStatus = data?.pet?.status ?? "";
+
+  const phone = data?.owner?.phone ?? data?.phone ?? null;
+  const email = data?.owner?.email ?? data?.email ?? null;
+
+  const badge = useMemo(() => {
+    if (!state) return null;
+    const base = "inline-block rounded-full px-3 py-1 text-xs font-bold";
+    if (state === "LOST") return <span className={`${base} bg-red-100 text-red-800`}>LOST</span>;
+    if (state === "SAFE") return <span className={`${base} bg-green-100 text-green-800`}>SAFE</span>;
+    if (state === "UNASSIGNED") return <span className={`${base} bg-yellow-100 text-yellow-800`}>NIJE DODELJENO</span>;
+    return <span className={`${base} bg-gray-100 text-gray-700`}>NIJE AKTIVIRAN</span>;
+  }, [state]);
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow">
-        <h1 className="text-xl font-bold">Pet NFC</h1>
-        <div className="mt-2 text-sm text-gray-600">
-          Tag: <span className="font-mono">{tagId || "-"}</span>
-        </div>
-
-        {loading && (
-          <div className="mt-4 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
-            Učitavam…
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="mx-auto max-w-md">
+        <div className="rounded-2xl bg-white p-6 shadow space-y-4">
+          <div>
+            <div className="text-xl font-bold">Pet NFC</div>
+            <div className="text-sm text-gray-600 mt-1">Tag: {tagId}</div>
           </div>
-        )}
 
-        {err && (
-          <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
-            {err}
-          </div>
-        )}
+          {loading && <div className="text-sm text-gray-600">Učitavam…</div>}
 
-        {!loading && !err && data && (
-          <div className="mt-4 space-y-3">
-            {data.state === "UNACTIVATED" && (
-              <>
-                <div className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold">
-                  NIJE AKTIVIRAN
-                </div>
-                <p className="text-sm text-gray-700">{data.message}</p>
-                <p className="text-sm text-gray-600">
-                  Vlasnik treba da aktivira tag u aplikaciji (Setup → Aktiviraj tag).
-                </p>
-              </>
-            )}
+          {err && (
+            <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
+              {err}
+            </div>
+          )}
 
-            {data.state === "UNASSIGNED" && (
-              <>
-                <div className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold">
-                  NIJE DODELJENO
-                </div>
-                <p className="text-sm text-gray-700">{data.message}</p>
-                <p className="text-sm text-gray-600">
-                  Tag je aktivan, ali još nije dodeljen ljubimcu.
-                </p>
-              </>
-            )}
+          {!loading && !err && data && (
+            <>
+              <div className="flex items-center gap-2">{badge}</div>
 
-            {(data.state === "SAFE" || data.state === "LOST") && (
-              <>
-                <div
-                  className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
-                    data.state === "SAFE" ? "bg-green-50" : "bg-red-50"
-                  }`}
-                >
-                  {data.state}
-                </div>
-
-                <div className="rounded-xl border p-3">
-                  <div className="font-semibold">
-                    {data.pet.name}{" "}
-                    <span className="text-gray-500">({data.pet.species})</span>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    Status: <b>{data.pet.status}</b>
-                  </div>
-                </div>
-
-                {data.pet.status !== "LOST" ? (
-                  <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
-                    Ljubimac nije prijavljen kao izgubljen.
-                    <div className="mt-1 text-gray-600">
-                      Kontakt se prikazuje samo ako je ljubimac prijavljen kao izgubljen.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-sm text-gray-700 font-semibold">
-                      Kontakt vlasnika (LOST):
-                    </div>
-
-                    {data.owner?.phone ? (
-                      <a
-                        className="block rounded-xl bg-black px-4 py-3 text-center font-semibold text-white"
-                        href={`tel:${data.owner.phone}`}
-                      >
-                        Pozovi: {data.owner.phone}
-                      </a>
-                    ) : null}
-
-                    {data.owner?.email ? (
-                      <a
-                        className="block rounded-xl border px-4 py-3 text-center font-semibold"
-                        href={`mailto:${data.owner.email}`}
-                      >
-                        Pošalji email: {data.owner.email}
-                      </a>
-                    ) : null}
-
-                    {!data.owner?.phone && !data.owner?.email && (
-                      <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
-                        Kontakt nije dostupan.
-                      </div>
-                    )}
-                  </div>
+              {/* Info box */}
+              <div className="rounded-xl border p-4">
+                {state === "UNACTIVATED" && (
+                  <>
+                    <div className="font-semibold">Tag nije aktiviran</div>
+                    <p className="mt-2 text-sm text-gray-700">
+                      {data.message ??
+                        "Ovaj tag nije aktiviran. Vlasnik treba da ga aktivira u aplikaciji."}
+                    </p>
+                  </>
                 )}
-              </>
-            )}
-          </div>
-        )}
+
+                {state === "UNASSIGNED" && (
+                  <>
+                    <div className="font-semibold">Tag je aktivan, ali nije dodeljen ljubimcu</div>
+                    <p className="mt-2 text-sm text-gray-700">
+                      {data.message ?? "Vlasnik još nije povezao ovaj tag sa profilom ljubimca."}
+                    </p>
+                  </>
+                )}
+
+                {(state === "SAFE" || state === "LOST") && (
+                  <>
+                    <div className="font-semibold">
+                      {petName ? (
+                        <>
+                          {petName}{" "}
+                          {petSpecies ? <span className="text-gray-500">({petSpecies})</span> : null}
+                        </>
+                      ) : (
+                        "Profil ljubimca"
+                      )}
+                    </div>
+
+                    <div className="mt-2 text-sm text-gray-700">
+                      Status: <b>{state === "LOST" ? "LOST" : "SAFE"}</b>
+                      {petStatus ? <span className="text-gray-500"> • ({petStatus})</span> : null}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* SAFE/LOST actions */}
+              {state === "SAFE" && (
+                <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+                  Ljubimac nije prijavljen kao izgubljen.
+                  <br />
+                  Kontakt se prikazuje samo ako je ljubimac prijavljen kao izgubljen.
+                </div>
+              )}
+
+              {state === "LOST" && (
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-red-50 p-4 text-sm text-red-800">
+                    Ljubimac je prijavljen kao izgubljen. Kontaktiraj vlasnika:
+                  </div>
+
+                  {phone ? (
+                    <a
+                      className="block rounded-xl bg-black px-4 py-3 text-center font-semibold text-white"
+                      href={`tel:${phone}`}
+                    >
+                      Pozovi vlasnika
+                    </a>
+                  ) : null}
+
+                  {email ? (
+                    <a
+                      className="block rounded-xl border px-4 py-3 text-center font-semibold hover:bg-gray-100"
+                      href={`mailto:${email}?subject=Pronađen ljubimac (${tagId})`}
+                    >
+                      Pošalji email
+                    </a>
+                  ) : null}
+
+                  {!phone && !email && (
+                    <div className="rounded-xl bg-yellow-50 p-4 text-sm text-yellow-900">
+                      Kontakt podaci nisu dostupni za ovaj profil.
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
