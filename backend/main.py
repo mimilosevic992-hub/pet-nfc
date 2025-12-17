@@ -236,7 +236,7 @@ def admin_tag_detail(
 
 @app.get("/admin/me")
 def admin_me(admin: User = Depends(require_admin)):
-    return {"is_admin": True, "email": admin.email}
+    return {"email": admin.email}
 
 # =========================
 # Owner profile (auth)
