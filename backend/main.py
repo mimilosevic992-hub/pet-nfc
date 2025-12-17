@@ -1,9 +1,11 @@
 import os
+import io
+import csv
 from datetime import date
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, Field
@@ -233,6 +235,41 @@ def admin_tag_detail(
             else None
         ),
     }
+
+@app.get("/admin/tags/export")
+def admin_export_tags(
+    status: str = "FREE",
+    limit: int = 5000,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    # PUBLIC URL treba da bude FRONTEND domen (Vercel), ne Render
+    site = os.getenv("PUBLIC_SITE_URL", "https://pet-nfc.vercel.app").rstrip("/")
+
+    q = db.query(Tag)
+
+    # filtriranje po statusu (npr FREE / ACTIVE / ASSIGNED / LOST_TAG)
+    if status and status.upper() != "ALL":
+        q = q.filter(Tag.status == status.upper())
+
+    tags = q.order_by(Tag.id.asc()).limit(limit).all()
+
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["tag_id", "public_url", "status"])
+
+    for t in tags:
+        w.writerow([t.tag_id, f"{site}/t/{t.tag_id}", t.status])
+
+    csv_bytes = out.getvalue().encode("utf-8")
+
+    filename = f"petnfc_tags_{status.lower()}.csv"
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 
 @app.get("/admin/me")
 def admin_me(admin: User = Depends(require_admin)):

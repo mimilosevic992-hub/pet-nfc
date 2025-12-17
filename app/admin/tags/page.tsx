@@ -104,6 +104,33 @@ export default function AdminTagsPage() {
     }
   }
 
+  async function exportFreeCsv() {
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) throw new Error("Nisi ulogovan.");
+
+      const res = await fetch(`${API_BASE}/admin/tags/export?status=FREE&limit=5000`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "petnfc_tags_free.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setErr(e?.message ?? "Greška pri export-u");
+    }
+  }
+
   function closeDetail() {
     setSelectedId(null);
     setDetail(null);
@@ -224,6 +251,12 @@ export default function AdminTagsPage() {
               title="Copy sve public URL-ove iz filtera"
             >
               Copy URLs (filter)
+            </button>
+            <button
+              onClick={exportFreeCsv}
+              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+            >
+              Export FREE (CSV)
             </button>
           </div>
 
