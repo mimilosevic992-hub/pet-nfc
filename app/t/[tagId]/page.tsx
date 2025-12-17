@@ -167,12 +167,12 @@ export default function PublicTagPage() {
 
                   {email ? (
                     <a
-                      className="block rounded-xl border px-4 py-3 text-center font-semibold"
-                      href={`mailto:${email}`}
+                        className="block rounded-xl border px-4 py-3 text-center font-semibold"
+                        href={`mailto:${email}?subject=Pronađen ljubimac (${tagId})`}
                     >
-                      Pošalji email: {email}
+                        Pošalji email
                     </a>
-                  ) : null}
+                    ) : null}
 
                   {!phone && !email && (
                     <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
