@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
 
 type StateResponse = {
   state: "UNACTIVATED" | "UNASSIGNED" | "SAFE" | "LOST";
   message?: string;
-
-  // OPTIONAL: zavisi šta backend šalje
-  tag_id?: string;
 
   pet?: {
     name?: string;
@@ -23,20 +21,33 @@ type StateResponse = {
     city?: string | null;
   };
 
-  // ako šalješ direktno:
   email?: string | null;
   phone?: string | null;
   city?: string | null;
 };
 
-export default function PublicTagPage({ params }: { params: { tagId: string } }) {
-  const tagId = decodeURIComponent(params.tagId);
+export default function PublicTagPage() {
+  const params = useParams();
+
+  // useParams može vratiti string | string[] | undefined
+  const raw = params?.tagId;
+  const tagId = useMemo(() => {
+    if (!raw) return null;
+    const v = Array.isArray(raw) ? raw[0] : raw;
+    return decodeURIComponent(v);
+  }, [raw]);
 
   const [data, setData] = useState<StateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!tagId) {
+      setLoading(false);
+      setErr("Ne mogu da pročitam tagId iz URL-a.");
+      return;
+    }
+
     let alive = true;
 
     (async () => {
@@ -52,7 +63,6 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
         const text = await res.text();
         if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
-        // backend vraća JSON
         const json = JSON.parse(text) as StateResponse;
 
         if (!alive) return;
@@ -73,10 +83,6 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
 
   const state = data?.state;
 
-  const petName = data?.pet?.name ?? "";
-  const petSpecies = data?.pet?.species ?? "";
-  const petStatus = data?.pet?.status ?? "";
-
   const phone = data?.owner?.phone ?? data?.phone ?? null;
   const email = data?.owner?.email ?? data?.email ?? null;
 
@@ -85,7 +91,8 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
     const base = "inline-block rounded-full px-3 py-1 text-xs font-bold";
     if (state === "LOST") return <span className={`${base} bg-red-100 text-red-800`}>LOST</span>;
     if (state === "SAFE") return <span className={`${base} bg-green-100 text-green-800`}>SAFE</span>;
-    if (state === "UNASSIGNED") return <span className={`${base} bg-yellow-100 text-yellow-800`}>NIJE DODELJENO</span>;
+    if (state === "UNASSIGNED")
+      return <span className={`${base} bg-yellow-100 text-yellow-800`}>NIJE DODELJENO</span>;
     return <span className={`${base} bg-gray-100 text-gray-700`}>NIJE AKTIVIRAN</span>;
   }, [state]);
 
@@ -95,7 +102,7 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
         <div className="rounded-2xl bg-white p-6 shadow space-y-4">
           <div>
             <div className="text-xl font-bold">Pet NFC</div>
-            <div className="text-sm text-gray-600 mt-1">Tag: {tagId}</div>
+            <div className="text-sm text-gray-600 mt-1">Tag: {tagId ?? "-"}</div>
           </div>
 
           {loading && <div className="text-sm text-gray-600">Učitavam…</div>}
@@ -110,7 +117,6 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
             <>
               <div className="flex items-center gap-2">{badge}</div>
 
-              {/* Info box */}
               <div className="rounded-xl border p-4">
                 {state === "UNACTIVATED" && (
                   <>
@@ -134,10 +140,12 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
                 {(state === "SAFE" || state === "LOST") && (
                   <>
                     <div className="font-semibold">
-                      {petName ? (
+                      {data.pet?.name ? (
                         <>
-                          {petName}{" "}
-                          {petSpecies ? <span className="text-gray-500">({petSpecies})</span> : null}
+                          {data.pet.name}{" "}
+                          {data.pet.species ? (
+                            <span className="text-gray-500">({data.pet.species})</span>
+                          ) : null}
                         </>
                       ) : (
                         "Profil ljubimca"
@@ -146,13 +154,11 @@ export default function PublicTagPage({ params }: { params: { tagId: string } })
 
                     <div className="mt-2 text-sm text-gray-700">
                       Status: <b>{state === "LOST" ? "LOST" : "SAFE"}</b>
-                      {petStatus ? <span className="text-gray-500"> • ({petStatus})</span> : null}
                     </div>
                   </>
                 )}
               </div>
 
-              {/* SAFE/LOST actions */}
               {state === "SAFE" && (
                 <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
                   Ljubimac nije prijavljen kao izgubljen.
