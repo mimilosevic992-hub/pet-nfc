@@ -46,9 +46,12 @@ export default function AdminTagsPage() {
   const [detailErr, setDetailErr] = useState<string | null>(null);
 
   // ✅ FRONTEND public URL (Vercel) - ne API
+  const SITE_URL =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "https://pet-nfc.vercel.app");
+
   function publicUrl(tagId: string) {
-    if (typeof window === "undefined") return `/t/${tagId}`;
-    return `${window.location.origin}/t/${tagId}`;
+    return `${SITE_URL}/t/${tagId}`;
   }
 
   async function copy(text: string) {

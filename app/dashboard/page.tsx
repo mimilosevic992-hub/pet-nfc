@@ -172,7 +172,7 @@ export default function DashboardPage() {
                           NFC link:{" "}
                           <a
                             className="underline"
-                            href={`${TAG_BASE}/t/${p.tag_id}`}
+                            href={`/t/${p.tag_id}`}
                             target="_blank"
                             rel="noreferrer"
                           >
