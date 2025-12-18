@@ -536,6 +536,34 @@ def create_pet_and_assign_auth(
 
     return {"ok": True, "pet_id": pet.id, "tag_id": tag.tag_id, "tag_status": tag.status}
 
+@app.get("/pets/{pet_id}")
+def get_pet_detail_auth(
+    pet_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+
+    # sigurnost: samo vlasnik
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    tag = db.query(Tag).filter(Tag.id == pet.tag_id).first() if pet.tag_id else None
+
+    return {
+        "pet_id": pet.id,
+        "name": pet.name,
+        "species": pet.species,
+        "birth_date": pet.birth_date.isoformat() if pet.birth_date else None,
+        "pedigree": bool(getattr(pet, "pedigree", False)),
+        "status": pet.status,
+        "tag_id": tag.tag_id if tag else None,
+        "tag_status": tag.status if tag else None,
+    }
+
+
 
 # =========================
 # Pets (auth) — my pets list
