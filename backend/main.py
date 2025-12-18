@@ -19,6 +19,7 @@ from enum import Enum
 from db import Base, engine, SessionLocal  # tvoj db.py
 from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User  # tvoj models.py
 from auth import hash_password, verify_password, create_access_token, get_current_user
+from typing import List
 
 app = FastAPI(title="Pet NFC API")
 
@@ -40,18 +41,16 @@ templates = Jinja2Templates(directory="templates")
 # Kreira tabele prvi put
 Base.metadata.create_all(bind=engine)
 
-def ensure_tagstatus_programmed():
-    with engine.connect() as conn:
-        try:
-            conn.execute(text(
-                "ALTER TYPE tagstatus ADD VALUE IF NOT EXISTS 'PROGRAMMED';"
-            ))
-            conn.commit()
-        except ProgrammingError:
-            # ako enum ne postoji ili je vec dodat – ignorisi
-            conn.rollback()
+def ensure_tagstatus_values():
+    # dodaje PRINTED u postgres enum tagstatus ako ne postoji
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TYPE tagstatus ADD VALUE 'PRINTED'"))
+    except ProgrammingError:
+        # već postoji ili nije postgres enum u tom okruženju
+        pass
 
-ensure_tagstatus_programmed()
+ensure_tagstatus_values()
 
 def get_db():
     db = SessionLocal()
@@ -100,6 +99,9 @@ class AdminExportSelectedRequest(BaseModel):
 
 class AdminTagIdsRequest(BaseModel):
     tag_ids: list[str]
+
+class AdminMarkPrintedRequest(BaseModel):
+    tag_ids: List[str]
 
 
 # =========================
@@ -372,6 +374,37 @@ def admin_unmark_programmed(
         "updated": updated,
         "missing": [x for x in ids if x not in found_ids],
     }
+
+@app.post("/admin/tags/mark_printed")
+def admin_mark_printed(
+    payload: AdminMarkPrintedRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    tag_ids = [t.strip() for t in payload.tag_ids if t and t.strip()]
+    if not tag_ids:
+        raise HTTPException(status_code=400, detail="Nema tagova.")
+
+    tags = db.query(Tag).filter(Tag.tag_id.in_(tag_ids)).all()
+    found = {t.tag_id for t in tags}
+    missing = [t for t in tag_ids if t not in found]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Neki tagovi ne postoje: {missing[:10]}")
+
+    # STRICT: samo PROGRAMMED -> PRINTED
+    not_programmed = [t.tag_id for t in tags if t.status != TagStatus.PROGRAMMED]
+    if not_programmed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Samo PROGRAMMED tagovi mogu u PRINTED. Problem: {not_programmed[:10]}",
+        )
+
+    for t in tags:
+        t.status = TagStatus.PRINTED
+
+    db.commit()
+    return {"updated_count": len(tags), "updated": [t.tag_id for t in tags]}
+
 
 
 @app.get("/admin/tags/{tag_id}")

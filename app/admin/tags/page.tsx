@@ -253,6 +253,37 @@ export default function AdminTagsPage() {
     }
   }
 
+  async function markPrintedSelected() {
+    const token = localStorage.getItem("petnfc_token");
+    if (!token) return;
+
+    const tag_ids = Object.keys(selected).filter((id) => selected[id]);
+    if (tag_ids.length === 0) return;
+
+    setLoading(true);
+    setErr(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/admin/tags/mark_printed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tag_ids }),
+      });
+
+      const text = await res.text();
+      if (!res.ok) throw new Error(text);
+
+      clearSelected();
+      await load();
+    } catch (e: any) {
+      setErr(e?.message ?? "Greška");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // Admin guard + initial load
   useEffect(() => {
@@ -399,12 +430,18 @@ export default function AdminTagsPage() {
                 Export SELECTED (CSV)
               </button>
               <button
+                onClick={markPrintedSelected}
+                disabled={Object.keys(selected).filter((k) => selected[k]).length === 0 || loading}
+                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Mark PRINTED (selected)
+              </button>
+              <button
                 onClick={markProgrammed}
                 className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
               >
                 Mark PROGRAMMED
               </button>
-
               <button
                 onClick={unmarkProgrammed}
                 className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"

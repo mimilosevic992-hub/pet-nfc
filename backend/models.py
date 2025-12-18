@@ -10,6 +10,7 @@ class TagStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     ASSIGNED = "ASSIGNED"
     PROGRAMMED = "PROGRAMMED"
+    PRINTED = "PRINTED"
     LOST_TAG = "LOST_TAG"
     REMOVED = "REMOVED"
     
