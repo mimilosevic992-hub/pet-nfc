@@ -50,7 +50,7 @@ export default function PetEditPage() {
       if (!petId) throw new Error("Neispravan petId.");
 
       // koristi istu rutu kao na profilu
-      const res = await fetch(`${API_BASE}/pets/by-id/${petId}`, {
+      const res = await fetch(`${API_BASE}/pets/${petId}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
