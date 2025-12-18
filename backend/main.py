@@ -102,13 +102,6 @@ class AdminTagIdsRequest(BaseModel):
     tag_ids: list[str]
 
 
-class TagStatus(str, Enum):
-    FREE = "FREE"
-    PROGRAMMED = "PROGRAMMED"
-    ACTIVE = "ACTIVE"
-    ASSIGNED = "ASSIGNED"
-    LOST_TAG = "LOST_TAG"
-
 # =========================
 # Basic
 # =========================

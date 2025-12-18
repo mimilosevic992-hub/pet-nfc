@@ -9,8 +9,10 @@ class TagStatus(str, enum.Enum):
     FREE = "FREE"
     ACTIVE = "ACTIVE"
     ASSIGNED = "ASSIGNED"
+    PROGRAMMED = "PROGRAMMED"
     LOST_TAG = "LOST_TAG"
     REMOVED = "REMOVED"
+    
 
 class Tag(Base):
     __tablename__ = "tags"
