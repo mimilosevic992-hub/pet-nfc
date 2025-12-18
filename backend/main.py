@@ -10,6 +10,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 
 import secrets
 import string
@@ -38,6 +40,18 @@ templates = Jinja2Templates(directory="templates")
 # Kreira tabele prvi put
 Base.metadata.create_all(bind=engine)
 
+def ensure_tagstatus_programmed():
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TYPE tagstatus ADD VALUE IF NOT EXISTS 'PROGRAMMED';"
+            ))
+            conn.commit()
+        except ProgrammingError:
+            # ako enum ne postoji ili je vec dodat – ignorisi
+            conn.rollback()
+
+ensure_tagstatus_programmed()
 
 def get_db():
     db = SessionLocal()
