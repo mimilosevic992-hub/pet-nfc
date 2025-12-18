@@ -84,9 +84,13 @@ class AdminGenerateTagsRequest(BaseModel):
 class AdminExportSelectedRequest(BaseModel):
     tag_ids: list[str]
 
+class AdminTagIdsRequest(BaseModel):
+    tag_ids: list[str]
+
 
 class TagStatus(str, Enum):
     FREE = "FREE"
+    PROGRAMMED = "PROGRAMMED"
     ACTIVE = "ACTIVE"
     ASSIGNED = "ASSIGNED"
     LOST_TAG = "LOST_TAG"
@@ -304,6 +308,63 @@ def admin_export_selected_tags(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+@app.post("/admin/tags/mark-programmed")
+def admin_mark_programmed(
+    payload: AdminTagIdsRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    ids = list({(x or "").strip() for x in payload.tag_ids if (x or "").strip()})
+    if not ids:
+        raise HTTPException(status_code=400, detail="Nema izabranih tagova.")
+
+    tags = db.query(Tag).filter(Tag.tag_id.in_(ids)).all()
+    found_ids = {t.tag_id for t in tags}
+
+    # menjamo samo FREE -> PROGRAMMED (ne diramo ACTIVE/ASSIGNED)
+    updated = 0
+    for t in tags:
+        if t.status == TagStatus.FREE:
+            t.status = TagStatus.PROGRAMMED
+            updated += 1
+
+    db.commit()
+    return {
+        "requested": len(ids),
+        "found": len(found_ids),
+        "updated": updated,
+        "missing": [x for x in ids if x not in found_ids],
+    }
+
+
+@app.post("/admin/tags/unmark-programmed")
+def admin_unmark_programmed(
+    payload: AdminTagIdsRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    ids = list({(x or "").strip() for x in payload.tag_ids if (x or "").strip()})
+    if not ids:
+        raise HTTPException(status_code=400, detail="Nema izabranih tagova.")
+
+    tags = db.query(Tag).filter(Tag.tag_id.in_(ids)).all()
+    found_ids = {t.tag_id for t in tags}
+
+    # vraćamo samo PROGRAMMED -> FREE
+    updated = 0
+    for t in tags:
+        if t.status == TagStatus.PROGRAMMED:
+            t.status = TagStatus.FREE
+            updated += 1
+
+    db.commit()
+    return {
+        "requested": len(ids),
+        "found": len(found_ids),
+        "updated": updated,
+        "missing": [x for x in ids if x not in found_ids],
+    }
 
 
 @app.get("/admin/tags/{tag_id}")

@@ -23,7 +23,7 @@ type TagDetail = {
   };
 };
 
-const STATUS_OPTIONS = ["ALL", "FREE", "ACTIVE", "ASSIGNED", "LOST_TAG"] as const;
+const STATUS_OPTIONS = ["ALL", "FREE", "PROGRAMMED", "ACTIVE", "ASSIGNED", "LOST_TAG"] as const;
 type StatusFilter = (typeof STATUS_OPTIONS)[number];
 
 function normalize(s: string) {
@@ -195,6 +195,65 @@ export default function AdminTagsPage() {
     }
   }
 
+  function getSelectedIds() {
+    return Object.entries(selected)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+  }
+
+  async function markProgrammed() {
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) throw new Error("Nisi ulogovan.");
+
+      const ids = getSelectedIds();
+      if (ids.length === 0) throw new Error("Nisi izabrao nijedan tag.");
+
+      const res = await fetch(`${API_BASE}/admin/tags/mark-programmed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tag_ids: ids }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      await load();       // osveži tabelu
+      clearSelected();    // očisti selekciju
+    } catch (e: any) {
+      setErr(e?.message ?? "Greška");
+    }
+  }
+
+  async function unmarkProgrammed() {
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) throw new Error("Nisi ulogovan.");
+
+      const ids = getSelectedIds();
+      if (ids.length === 0) throw new Error("Nisi izabrao nijedan tag.");
+
+      const res = await fetch(`${API_BASE}/admin/tags/unmark-programmed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tag_ids: ids }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      await load();
+      clearSelected();
+    } catch (e: any) {
+      setErr(e?.message ?? "Greška");
+    }
+  }
+
+
   // Admin guard + initial load
   useEffect(() => {
     const token = localStorage.getItem("petnfc_token");
@@ -338,6 +397,19 @@ export default function AdminTagsPage() {
                 className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
               >
                 Export SELECTED (CSV)
+              </button>
+              <button
+                onClick={markProgrammed}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+              >
+                Mark PROGRAMMED
+              </button>
+
+              <button
+                onClick={unmarkProgrammed}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+              >
+                Unmark PROGRAMMED
               </button>
             </div>
           </div>
