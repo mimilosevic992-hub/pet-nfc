@@ -81,6 +81,10 @@ class AdminGenerateTagsRequest(BaseModel):
     start: int = 1
     count: int = 100
 
+class AdminExportSelectedRequest(BaseModel):
+    tag_ids: list[str]
+
+
 class TagStatus(str, Enum):
     FREE = "FREE"
     ACTIVE = "ACTIVE"
@@ -236,6 +240,65 @@ def admin_export_tags(
     csv_bytes = out.getvalue().encode("utf-8")
 
     filename = f"petnfc_tags_{status.lower()}.csv"
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+@app.post("/admin/tags/export-selected")
+def admin_export_selected_tags(
+    payload: AdminExportSelectedRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    site = os.getenv("PUBLIC_SITE_URL", "https://pet-nfc.vercel.app").rstrip("/")
+
+    # očisti i ukloni duplikate
+    ids = []
+    seen = set()
+    for x in payload.tag_ids:
+        if not x:
+            continue
+        s = x.strip()
+        if not s:
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        ids.append(s)
+
+    if not ids:
+        raise HTTPException(status_code=400, detail="Nema izabranih tagova.")
+
+    tags = (
+        db.query(Tag)
+        .filter(Tag.tag_id.in_(ids))
+        .order_by(Tag.id.asc())
+        .all()
+    )
+
+    # napravi mapu da export bude u istom redosledu kao selection
+    found = {t.tag_id: t for t in tags}
+
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["tag_id", "public_url", "status"])
+
+    missing = []
+    for tid in ids:
+        t = found.get(tid)
+        if not t:
+            missing.append(tid)
+            continue
+        w.writerow([t.tag_id, f"{site}/t/{t.tag_id}", t.status])
+
+    # Ako hoćeš strogo: da pukne ako ima missing
+    # if missing:
+    #     raise HTTPException(status_code=400, detail=f"Neki tagovi ne postoje: {missing}")
+
+    csv_bytes = out.getvalue().encode("utf-8")
+    filename = "petnfc_tags_selected.csv"
     return StreamingResponse(
         io.BytesIO(csv_bytes),
         media_type="text/csv; charset=utf-8",

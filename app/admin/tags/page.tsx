@@ -45,6 +45,8 @@ export default function AdminTagsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
 
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+
   // ✅ FRONTEND public URL (Vercel) - ne API
   const SITE_URL =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -136,6 +138,61 @@ export default function AdminTagsPage() {
     setDetail(null);
     setDetailErr(null);
     setDetailLoading(false);
+  }
+
+  function toggleSelect(tagId: string) {
+    setSelected((prev) => ({ ...prev, [tagId]: !prev[tagId] }));
+  }
+
+  function clearSelected() {
+    setSelected({});
+  }
+
+  function selectedIdsFromCurrentList(list: TagRow[]) {
+    return list.filter((t) => selected[t.tag_id]).map((t) => t.tag_id);
+  }
+
+  function selectAllFiltered() {
+    setSelected((prev) => {
+      const next = { ...prev };
+      for (const t of filtered) next[t.tag_id] = true;
+      return next;
+    });
+  }
+
+  async function exportSelectedCsv() {
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) throw new Error("Nisi ulogovan.");
+
+      const ids = selectedIdsFromCurrentList(tags); // ili filtered ako želiš samo sa liste
+      if (ids.length === 0) throw new Error("Nisi izabrao nijedan tag.");
+
+      const res = await fetch(`${API_BASE}/admin/tags/export-selected`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tag_ids: ids }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "petnfc_tags_selected.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setErr(e?.message ?? "Greška pri export-u");
+    }
   }
 
   // Admin guard + initial load
@@ -269,6 +326,7 @@ export default function AdminTagsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
+                    <th className="py-2">Select</th>
                     <th className="py-2">Tag</th>
                     <th>Status</th>
                     <th>Vlasnik</th>
@@ -279,6 +337,13 @@ export default function AdminTagsPage() {
                 <tbody>
                   {filtered.map((t) => (
                     <tr key={t.tag_id} className="border-b last:border-0">
+                      <td className="py-2">
+                        <input
+                          type="checkbox"
+                          checked={!!selected[t.tag_id]}
+                          onChange={() => toggleSelect(t.tag_id)}
+                        />
+                      </td>
                       <td className="py-2 font-mono">{t.tag_id}</td>
                       <td>{t.status}</td>
                       <td className="text-gray-600">{t.owner_email ?? "-"}</td>
@@ -312,6 +377,28 @@ export default function AdminTagsPage() {
                           >
                             Details
                           </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={selectAllFiltered}
+                              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+                            >
+                              Select all (filter)
+                            </button>
+
+                            <button
+                              onClick={clearSelected}
+                              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+                            >
+                              Clear selected
+                            </button>
+
+                            <button
+                              onClick={exportSelectedCsv}
+                              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+                            >
+                              Export SELECTED (CSV)
+                            </button>
+                          </div>
                         </div>
                       </td>
                     </tr>
