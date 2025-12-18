@@ -1,13 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
-
-console.log("NEXT_PUBLIC_API_BASE =", process.env.NEXT_PUBLIC_API_BASE);
-const PUBLIC_TAG_BASE = "https://pet-nfc.onrender.com";
-const TAG_BASE = "https://pet-nfc.onrender.com";
 
 type PetRow = {
   pet_id: number;
@@ -15,21 +11,32 @@ type PetRow = {
   species: string;
   status: "ACTIVE" | "LOST" | "DECEASED";
   tag_id: string | null;
+  tag_status: string | null;
+
+  // opciono za kasnije (ako dodaš u backend)
+  avatar_url?: string | null;
+  breeding?: boolean | null;
 };
+
+function initials(name: string) {
+  const n = (name || "").trim();
+  if (!n) return "🐾";
+  const parts = n.split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase()).join("");
+}
 
 export default function DashboardPage() {
   const router = useRouter();
 
   const [pets, setPets] = useState<PetRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // Auth guard
-  useEffect(() => {
-    const token = localStorage.getItem("petnfc_token");
-    if (!token) router.replace("/login");
-  }, [router]);
+  function logout() {
+    localStorage.removeItem("petnfc_token");
+    router.push("/login");
+  }
 
   async function loadPets() {
     setLoading(true);
@@ -38,19 +45,21 @@ export default function DashboardPage() {
 
     try {
       const token = localStorage.getItem("petnfc_token");
-      if (!token) throw new Error("Nisi ulogovan.");
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
 
       const res = await fetch(`${API_BASE}/pets/my_auth`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
-      const data = (await res.json()) as PetRow[];
+      const data = JSON.parse(text) as PetRow[];
       setPets(data);
-      setMsg(`Učitano: ${data.length} ljubimaca`);
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
     } finally {
@@ -59,7 +68,6 @@ export default function DashboardPage() {
   }
 
   async function toggleLost(petId: number, nextLost: boolean) {
-    setLoading(true);
     setMsg(null);
     setErr(null);
 
@@ -76,37 +84,69 @@ export default function DashboardPage() {
         body: JSON.stringify({ lost: nextLost }),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
-      await loadPets();
+      // lokalno osveži (brže nego full reload)
+      setPets((prev) =>
+        prev.map((p) =>
+          p.pet_id === petId ? { ...p, status: nextLost ? "LOST" : "ACTIVE" } : p
+        )
+      );
+
       setMsg(nextLost ? "LOST uključen" : "LOST isključen");
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
-    } finally {
-      setLoading(false);
     }
   }
 
-  function logout() {
-    localStorage.removeItem("petnfc_token");
-    router.replace("/login");
-  }
+  useEffect(() => {
+    const token = localStorage.getItem("petnfc_token");
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+    loadPets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const hasPets = pets.length > 0;
+
+  const title = useMemo(() => {
+    if (loading) return "Dashboard";
+    if (!hasPets) return "Dashboard — nema ljubimaca";
+    return "Dashboard";
+  }, [loading, hasPets]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-3xl space-y-4">
-        {/* HEADER */}
+      <div className="mx-auto max-w-6xl space-y-4">
+        {/* Header */}
         <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-2xl font-bold">Dashboard 🚀 CONNECTED</h1>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">{title}</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Tvoji ljubimci i brze akcije (LOST / profil).
+              </p>
+            </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <a
                 href="/pets/new"
                 className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
               >
                 + Dodaj ljubimca
               </a>
+
+              <button
+                onClick={loadPets}
+                disabled={loading}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
+              >
+                {loading ? "Učitavam..." : "Osveži"}
+              </button>
+
               <button
                 onClick={logout}
                 className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
@@ -115,14 +155,6 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-
-          <button
-            onClick={loadPets}
-            disabled={loading}
-            className="mt-4 rounded-xl bg-black px-4 py-2 font-semibold text-white disabled:opacity-40"
-          >
-            {loading ? "Učitavam..." : "Učitaj moje ljubimce"}
-          </button>
 
           {msg && (
             <div className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-800">
@@ -136,58 +168,128 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* PET LIST */}
+        {/* Body */}
         <div className="rounded-2xl bg-white p-6 shadow">
-          <h2 className="text-lg font-bold">Moji ljubimci</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold">Moji ljubimci</h2>
+            <div className="text-sm text-gray-600">
+              Ukupno: <b>{pets.length}</b>
+            </div>
+          </div>
 
-          {pets.length === 0 ? (
-            <p className="mt-3 text-sm text-gray-600">
-              Nema ljubimaca (ili još nisi učitao).
-            </p>
+          {loading ? (
+            <p className="mt-4 text-sm text-gray-600">Učitavam…</p>
+          ) : !hasPets ? (
+            <div className="mt-4 rounded-2xl border bg-gray-50 p-6">
+              <div className="font-semibold">Nemaš još ljubimaca.</div>
+              <p className="mt-2 text-sm text-gray-700">
+                Klikni na <b>Dodaj ljubimca</b> i aktiviraj tag da kreiraš profil.
+              </p>
+              <a
+                href="/pets/new"
+                className="mt-4 inline-flex rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+              >
+                + Dodaj ljubimca
+              </a>
+            </div>
           ) : (
-            <div className="mt-4 grid gap-3">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {pets.map((p) => {
                 const isLost = p.status === "LOST";
+                const avatar = p.avatar_url;
 
                 return (
                   <div
                     key={p.pet_id}
-                    className="rounded-2xl border bg-white p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="rounded-2xl border bg-white p-4 shadow-sm flex flex-col gap-3"
                   >
-                    <div>
-                      <div className="font-semibold">
-                        {p.name}{" "}
-                        <span className="text-gray-500">
-                          ({p.species})
-                        </span>
-                      </div>
-
-                      <div className="text-sm text-gray-600">
-                        Status: <b>{p.status}</b> • Tag:{" "}
-                        <b>{p.tag_id ?? "-"}</b>
-                      </div>
-
-                      {p.tag_id && (
-                        <div className="text-sm text-gray-600">
-                          NFC link:{" "}
-                          <a
-                            className="underline"
-                            href={`/t/${p.tag_id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            /t/{p.tag_id}
-                          </a>
+                    {/* Top */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {/* Avatar */}
+                        <div className="h-12 w-12 rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden">
+                          {avatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatar}
+                              alt={p.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-sm font-bold text-gray-700">
+                              {initials(p.name)}
+                            </span>
+                          )}
                         </div>
-                      )}
+
+                        <div>
+                          <div className="font-semibold">
+                            {p.name}{" "}
+                            <span className="text-gray-500">({p.species})</span>
+                          </div>
+                          <div className="text-xs text-gray-600 mt-0.5">
+                            Tag: <span className="font-mono">{p.tag_id ?? "-"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Badges */}
+                      <div className="flex flex-col items-end gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-bold ${
+                            isLost
+                              ? "bg-red-100 text-red-800"
+                              : "bg-green-100 text-green-800"
+                          }`}
+                        >
+                          {isLost ? "LOST" : "SAFE"}
+                        </span>
+
+                        {/* placeholder za breeding (kad ubacimo) */}
+                        {p.breeding ? (
+                          <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
+                            BREEDING
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* Public link */}
+                    {p.tag_id ? (
+                      <div className="text-sm text-gray-600">
+                        Public profil:{" "}
+                        <a
+                          className="underline"
+                          href={`https://pet-nfc.vercel.app/t/${encodeURIComponent(p.tag_id)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          /t/{p.tag_id}
+                        </a>
+                      </div>
+                    ) : null}
+
+                    {/* Actions */}
+                    <div className="mt-auto grid grid-cols-2 gap-2">
+                      <a
+                        href={`/pets/${p.pet_id}`}
+                        className="rounded-xl border px-3 py-2 text-center text-sm font-semibold hover:bg-gray-100"
+                      >
+                        Profil
+                      </a>
+                      <a
+                        href={`/pets/${p.pet_id}/edit`}
+                        className="rounded-xl border px-3 py-2 text-center text-sm font-semibold hover:bg-gray-100"
+                      >
+                        Izmeni profil
+                      </a>
                     </div>
 
                     <button
                       onClick={() => toggleLost(p.pet_id, !isLost)}
-                      disabled={loading}
-                      className={`rounded-xl px-4 py-2 font-semibold text-white ${
+                      className={`rounded-xl px-4 py-2 text-sm font-semibold text-white ${
                         isLost ? "bg-red-600" : "bg-emerald-600"
-                      } disabled:opacity-40`}
+                      }`}
                     >
                       {isLost ? "Isključi LOST" : "Uključi LOST"}
                     </button>
