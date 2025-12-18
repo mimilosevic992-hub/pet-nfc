@@ -79,3 +79,55 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
+class HealthEntry(Base):
+    __tablename__ = "health_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # vlasnik kroz Pet (auth proverava da li pet.owner_email == current_user.email)
+    pet_id = Column(Integer, ForeignKey("pets.id"), index=True, nullable=False)
+    pet = relationship("Pet")
+
+    # Sekcije: VACCINATION | CHECKUP | THERAPY | ALLERGY | NOTE
+    section = Column(String, nullable=False)
+
+    # datum zapisa (YYYY-MM-DD kao string, jer i Pet.birth_date ti je string)
+    date = Column(String, nullable=False)
+
+    # univerzalno: naslov + opis
+    title = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+
+    # opcioni “zajednički” podaci
+    vet_name = Column(String, nullable=True)
+    clinic = Column(String, nullable=True)
+
+    # Alergije (samo ovde, statično, bez podsetnika)
+    allergen = Column(String, nullable=True)
+    reaction = Column(String, nullable=True)
+
+    # ako je nastalo iz podsetnika (za ALLERGY mora ostati NULL)
+    source_reminder_id = Column(Integer, ForeignKey("reminders.id"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    pet_id = Column(Integer, ForeignKey("pets.id"), index=True, nullable=False)
+    pet = relationship("Pet")
+
+    # Tipovi: VACCINE | CHECKUP | THERAPY
+    type = Column(String, nullable=False)
+
+    # datum podsetnika (YYYY-MM-DD)
+    date = Column(String, nullable=False)
+
+    title = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
