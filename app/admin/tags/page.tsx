@@ -296,26 +296,52 @@ export default function AdminTagsPage() {
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-bold">
               Rezultati: <span className="text-gray-600">{filtered.length}</span>
             </h2>
 
-            <button
-              onClick={() => copy(filtered.map((t) => publicUrl(t.tag_id)).join("\n"))}
-              disabled={filtered.length === 0}
-              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
-              title="Copy sve public URL-ove iz filtera"
-            >
-              Copy URLs (filter)
-            </button>
-            <button
-              onClick={exportFreeCsv}
-              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
-            >
-              Export FREE (CSV)
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => copy(filtered.map((t) => publicUrl(t.tag_id)).join("\n"))}
+                disabled={filtered.length === 0}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
+                title="Copy sve public URL-ove iz filtera"
+              >
+                Copy URLs (filter)
+              </button>
+
+              <button
+                onClick={exportFreeCsv}
+                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+              >
+                Export FREE (CSV)
+              </button>
+
+              <button
+                onClick={selectAllFiltered}
+                disabled={filtered.length === 0}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
+              >
+                Select all (filter)
+              </button>
+
+              <button
+                onClick={clearSelected}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+              >
+                Clear selected
+              </button>
+
+              <button
+                onClick={exportSelectedCsv}
+                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+              >
+                Export SELECTED (CSV)
+              </button>
+            </div>
           </div>
+
 
           {loading ? (
             <p className="mt-4 text-sm text-gray-600">Učitavam…</p>
@@ -377,28 +403,6 @@ export default function AdminTagsPage() {
                           >
                             Details
                           </button>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={selectAllFiltered}
-                              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
-                            >
-                              Select all (filter)
-                            </button>
-
-                            <button
-                              onClick={clearSelected}
-                              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
-                            >
-                              Clear selected
-                            </button>
-
-                            <button
-                              onClick={exportSelectedCsv}
-                              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
-                            >
-                              Export SELECTED (CSV)
-                            </button>
-                          </div>
                         </div>
                       </td>
                     </tr>
