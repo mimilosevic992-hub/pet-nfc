@@ -103,6 +103,8 @@ class AdminTagIdsRequest(BaseModel):
 class AdminMarkPrintedRequest(BaseModel):
     tag_ids: List[str]
 
+class PetEditRequest(BaseModel):
+    pedigree: bool
 
 # =========================
 # Basic
@@ -559,6 +561,28 @@ def my_pets_auth(current_user: User = Depends(get_current_user), db: Session = D
         })
     return out
 
+@app.patch("/pets/{pet_id}/edit_auth")
+def edit_pet_auth(
+    pet_id: int,
+    payload: PetEditRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    # dozvoljavamo samo pedigree za sada
+    pet.pedigree = payload.pedigree
+    db.add(pet)
+    db.commit()
+    db.refresh(pet)
+
+    return {"ok": True, "pet_id": pet.id, "pedigree": bool(getattr(pet, "pedigree", False))}
+
 @app.get("/pets/{pet_id}")
 def get_pet_detail_auth(
     pet_id: int,
@@ -593,6 +617,8 @@ def get_pet_detail_auth(
         "tag_id": tag.tag_id if tag else None,
         "tag_status": tag.status if tag else None,
     }
+
+
 # =========================
 # Pets (auth) — lost toggle
 # =========================
