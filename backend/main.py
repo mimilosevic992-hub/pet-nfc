@@ -575,11 +575,19 @@ def get_pet_detail_auth(
 
     tag = db.query(Tag).filter(Tag.id == pet.tag_id).first() if pet.tag_id else None
 
+    birth = pet.birth_date
+    if birth is None:
+        birth_out = None
+    elif isinstance(birth, str):
+        birth_out = birth
+    else:
+        birth_out = birth.isoformat()
+
     return {
         "pet_id": pet.id,
         "name": pet.name,
         "species": pet.species,
-        "birth_date": pet.birth_date.isoformat() if pet.birth_date else None,
+        "birth_date": birth_out,
         "pedigree": bool(getattr(pet, "pedigree", False)),
         "status": pet.status,
         "tag_id": tag.tag_id if tag else None,
