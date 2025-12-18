@@ -133,6 +133,30 @@ export default function AdminTagsPage() {
     }
   }
 
+  async function exportCsvByStatus(s: string) {
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) throw new Error("Nisi ulogovan.");
+
+      const res = await fetch(`${API_BASE}/admin/tags/export?status=${encodeURIComponent(s)}&limit=5000`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `petnfc_tags_${s.toLowerCase()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setErr(e?.message ?? "Greška");
+    }
+  }
+
   function closeDetail() {
     setSelectedId(null);
     setDetail(null);
@@ -402,6 +426,22 @@ export default function AdminTagsPage() {
               </button>
 
               <button
+                onClick={() => copy(getSelectedIds().join("\n"))}
+                disabled={getSelectedIds().length === 0}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
+              >
+                Copy SELECTED IDs
+              </button>
+
+              <button
+                onClick={() => copy(getSelectedIds().map((id) => publicUrl(id)).join("\n"))}
+                disabled={getSelectedIds().length === 0}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
+              >
+                Copy SELECTED URLs
+              </button>
+
+              <button
                 onClick={exportFreeCsv}
                 className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
               >
@@ -428,6 +468,12 @@ export default function AdminTagsPage() {
                 className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
               >
                 Export SELECTED (CSV)
+              </button>
+              <button
+                onClick={() => exportCsvByStatus("PRINTED")}
+                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+              >
+                Export PRINTED (CSV)
               </button>
               <button
                 onClick={markPrintedSelected}
