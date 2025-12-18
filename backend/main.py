@@ -536,6 +536,29 @@ def create_pet_and_assign_auth(
 
     return {"ok": True, "pet_id": pet.id, "tag_id": tag.tag_id, "tag_status": tag.status}
 
+
+
+# =========================
+# Pets (auth) — my pets list
+# =========================
+
+@app.get("/pets/my_auth")
+def my_pets_auth(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    pets = db.query(Pet).filter(Pet.owner_email == current_user.email).all()
+
+    out = []
+    for p in pets:
+        tag = db.query(Tag).filter(Tag.id == p.tag_id).first()
+        out.append({
+            "pet_id": p.id,
+            "name": p.name,
+            "species": p.species,
+            "status": p.status,
+            "tag_id": tag.tag_id if tag else None,
+            "tag_status": tag.status if tag else None,
+        })
+    return out
+
 @app.get("/pets/{pet_id}")
 def get_pet_detail_auth(
     pet_id: int,
@@ -562,31 +585,6 @@ def get_pet_detail_auth(
         "tag_id": tag.tag_id if tag else None,
         "tag_status": tag.status if tag else None,
     }
-
-
-
-# =========================
-# Pets (auth) — my pets list
-# =========================
-
-@app.get("/pets/my_auth")
-def my_pets_auth(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    pets = db.query(Pet).filter(Pet.owner_email == current_user.email).all()
-
-    out = []
-    for p in pets:
-        tag = db.query(Tag).filter(Tag.id == p.tag_id).first()
-        out.append({
-            "pet_id": p.id,
-            "name": p.name,
-            "species": p.species,
-            "status": p.status,
-            "tag_id": tag.tag_id if tag else None,
-            "tag_status": tag.status if tag else None,
-        })
-    return out
-
-
 # =========================
 # Pets (auth) — lost toggle
 # =========================
