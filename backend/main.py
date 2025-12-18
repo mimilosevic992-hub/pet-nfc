@@ -17,7 +17,7 @@ import secrets
 import string
 from enum import Enum
 from db import Base, engine, SessionLocal  # tvoj db.py
-from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User  # tvoj models.py
+from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User, HealthEntry, Reminder  # tvoj models.py
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from typing import List
 
@@ -58,6 +58,21 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def reminder_status(d: str) -> str:
+    # d = "YYYY-MM-DD"
+    try:
+        y, m, dd = d.split("-")
+        rd = date(int(y), int(m), int(dd))
+    except Exception:
+        return "upcoming"
+
+    today = date.today()
+    if rd < today:
+        return "overdue"
+    if rd == today:
+        return "today"
+    return "upcoming"
 
 
 # =========================
@@ -105,6 +120,35 @@ class AdminMarkPrintedRequest(BaseModel):
 
 class PetEditRequest(BaseModel):
     pedigree: bool
+
+class HealthEntryCreateRequest(BaseModel):
+    section: str  # VACCINATION | CHECKUP | THERAPY | ALLERGY | NOTE
+    date: str     # "YYYY-MM-DD"
+    title: str
+    notes: str | None = None
+    vet_name: str | None = None
+    clinic: str | None = None
+
+    # alergije (samo ako section == ALLERGY)
+    allergen: str | None = None
+    reaction: str | None = None
+
+
+class ReminderCreateRequest(BaseModel):
+    type: str  # VACCINE | CHECKUP | THERAPY
+    date: str  # "YYYY-MM-DD"
+    title: str
+    notes: str | None = None
+
+
+class ReminderCompleteRequest(BaseModel):
+    # kada se završi podsetnik, pravimo entry u health kartonu
+    section: str  # mora da odgovara reminder type-u (vakcina/pregled/terapija)
+    date: str     # default isti datum, ali možeš prepraviti u formi
+    title: str
+    notes: str | None = None
+    vet_name: str | None = None
+    clinic: str | None = None
 
 # =========================
 # Basic
@@ -659,6 +703,244 @@ def set_lost_status_auth(
         "tag_id": tag.tag_id,
         "tag_status": tag.status,
     }
+
+# =========================
+# Health card (auth)
+# =========================
+
+@app.get("/pets/{pet_id}/health_auth")
+def list_health_entries_auth(
+    pet_id: int,
+    section: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    q = db.query(HealthEntry).filter(HealthEntry.pet_id == pet_id)
+    if section:
+        q = q.filter(HealthEntry.section == section.strip().upper())
+
+    items = q.order_by(HealthEntry.date.desc(), HealthEntry.id.desc()).limit(2000).all()
+    return [
+        {
+            "id": x.id,
+            "pet_id": x.pet_id,
+            "section": x.section,
+            "date": x.date,
+            "title": x.title,
+            "notes": x.notes,
+            "vet_name": x.vet_name,
+            "clinic": x.clinic,
+            "allergen": x.allergen,
+            "reaction": x.reaction,
+            "source_reminder_id": x.source_reminder_id,
+        }
+        for x in items
+    ]
+
+
+@app.post("/pets/{pet_id}/health_auth")
+def create_health_entry_auth(
+    pet_id: int,
+    payload: HealthEntryCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    section = payload.section.strip().upper()
+
+    if section == "ALLERGY":
+        # alergije su statične i ne potiču iz podsetnika
+        entry = HealthEntry(
+            pet_id=pet_id,
+            section=section,
+            date=payload.date,
+            title=payload.title,
+            notes=payload.notes,
+            vet_name=payload.vet_name,
+            clinic=payload.clinic,
+            allergen=payload.allergen,
+            reaction=payload.reaction,
+            source_reminder_id=None,
+        )
+    else:
+        entry = HealthEntry(
+            pet_id=pet_id,
+            section=section,
+            date=payload.date,
+            title=payload.title,
+            notes=payload.notes,
+            vet_name=payload.vet_name,
+            clinic=payload.clinic,
+            allergen=None,
+            reaction=None,
+            source_reminder_id=None,
+        )
+
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return {"ok": True, "id": entry.id}
+
+
+@app.delete("/health/{entry_id}_auth")
+def delete_health_entry_auth(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    entry = db.query(HealthEntry).filter(HealthEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Zapis ne postoji.")
+
+    pet = db.query(Pet).filter(Pet.id == entry.pet_id).first()
+    if not pet or pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup.")
+
+    db.delete(entry)
+    db.commit()
+    return {"ok": True}
+
+
+# =========================
+# Reminders (auth)
+# =========================
+
+@app.get("/pets/{pet_id}/reminders_auth")
+def list_reminders_auth(
+    pet_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    items = db.query(Reminder).filter(Reminder.pet_id == pet_id).order_by(Reminder.date.asc(), Reminder.id.asc()).all()
+
+    return [
+        {
+            "id": r.id,
+            "pet_id": r.pet_id,
+            "type": r.type,
+            "date": r.date,
+            "title": r.title,
+            "notes": r.notes,
+            "status": reminder_status(r.date),
+        }
+        for r in items
+    ]
+
+
+@app.post("/pets/{pet_id}/reminders_auth")
+def create_reminder_auth(
+    pet_id: int,
+    payload: ReminderCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    rtype = payload.type.strip().upper()
+    if rtype not in ["VACCINE", "CHECKUP", "THERAPY"]:
+        raise HTTPException(status_code=400, detail="Nepoznat tip podsetnika.")
+
+    r = Reminder(
+        pet_id=pet_id,
+        type=rtype,
+        date=payload.date,
+        title=payload.title,
+        notes=payload.notes,
+    )
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    return {"ok": True, "id": r.id}
+
+
+@app.post("/reminders/{reminder_id}/complete_auth")
+def complete_reminder_auth(
+    reminder_id: int,
+    payload: ReminderCompleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    r = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Podsetnik ne postoji.")
+
+    pet = db.query(Pet).filter(Pet.id == r.pet_id).first()
+    if not pet or pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup.")
+
+    section = payload.section.strip().upper()
+    if section == "ALLERGY":
+        raise HTTPException(status_code=400, detail="Alergije ne mogu nastati iz podsetnika.")
+
+    # osnovna validacija usklađenosti tipa
+    # (nije hard block, ali pomaže da ne upišemo vakcinu kao terapiju)
+    rt = r.type.upper()
+    if rt == "VACCINE" and section != "VACCINATION":
+        raise HTTPException(status_code=400, detail="Za tip VACCINE sekcija mora biti VACCINATION.")
+    if rt == "CHECKUP" and section != "CHECKUP":
+        raise HTTPException(status_code=400, detail="Za tip CHECKUP sekcija mora biti CHECKUP.")
+    if rt == "THERAPY" and section != "THERAPY":
+        raise HTTPException(status_code=400, detail="Za tip THERAPY sekcija mora biti THERAPY.")
+
+    entry = HealthEntry(
+        pet_id=r.pet_id,
+        section=section,
+        date=payload.date,
+        title=payload.title,
+        notes=payload.notes,
+        vet_name=payload.vet_name,
+        clinic=payload.clinic,
+        allergen=None,
+        reaction=None,
+        source_reminder_id=r.id,
+    )
+
+    db.add(entry)
+    db.delete(r)  # podsetnik se briše kad se završi
+    db.commit()
+    db.refresh(entry)
+
+    return {"ok": True, "health_entry_id": entry.id}
+
+
+@app.delete("/reminders/{reminder_id}_auth")
+def delete_reminder_auth(
+    reminder_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    r = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Podsetnik ne postoji.")
+
+    pet = db.query(Pet).filter(Pet.id == r.pet_id).first()
+    if not pet or pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup.")
+
+    db.delete(r)
+    db.commit()
+    return {"ok": True}
 
 
 # =========================
