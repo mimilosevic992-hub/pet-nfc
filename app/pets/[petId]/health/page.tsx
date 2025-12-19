@@ -92,6 +92,33 @@ export default function HealthHubPage() {
     }
   }
 
+  async function downloadPdf() {
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) return router.replace("/login");
+
+      const res = await fetch(`${API_BASE}/pets/${encodeURIComponent(petId)}/health_pdf_auth`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pet-nfc-karton-${petId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e?.message ?? "Greška pri preuzimanju PDF-a");
+    }
+  }
+
   useEffect(() => {
     const token = localStorage.getItem("petnfc_token");
     if (!token) {
@@ -128,6 +155,13 @@ export default function HealthHubPage() {
             >
               ← Profil
             </Link>
+
+            <button
+              onClick={downloadPdf}
+              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+            >
+              📄 Preuzmi PDF
+            </button>
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
