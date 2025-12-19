@@ -13,26 +13,10 @@ type Entry = {
   title: string;
   date?: string | null;
   notes?: string | null;
-
-  // ✅ nova polja (unos iz podsetnika često ide ovde)
   vet_name?: string | null;
   clinic?: string | null;
-
-  // ✅ stari način (ručni unos kod tebe trenutno ide u meta)
   meta?: any;
 };
-
-function pickVet(e: Entry) {
-  return (e.vet_name ?? e.meta?.vet ?? null) as string | null;
-}
-
-function pickClinic(e: Entry) {
-  return (e.clinic ?? e.meta?.clinic ?? null) as string | null;
-}
-
-function pickNextDue(e: Entry) {
-  return (e.meta?.next_due ?? null) as string | null;
-}
 
 export default function VaccinationsPage() {
   const params = useParams();
@@ -45,11 +29,8 @@ export default function VaccinationsPage() {
 
   const [vaccineName, setVaccineName] = useState("");
   const [givenAt, setGivenAt] = useState("");
-
-  // ✅ razdvojeno
   const [vetName, setVetName] = useState("");
   const [clinic, setClinic] = useState("");
-
   const [nextDue, setNextDue] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -84,21 +65,14 @@ export default function VaccinationsPage() {
       const token = localStorage.getItem("petnfc_token");
       if (!token) throw new Error("Nisi ulogovan.");
 
-      // ✅ kompatibilno: šaljemo i nova polja + meta (za legacy prikaz)
       const payload = {
         section: SECTION,
         title: vaccineName.trim(),
         date: givenAt || null,
         notes: notes.trim() || null,
-
         vet_name: vetName.trim() || null,
         clinic: clinic.trim() || null,
-
-        meta: {
-          vet: vetName.trim() || null,
-          clinic: clinic.trim() || null,
-          next_due: nextDue || null,
-        },
+        meta: { next_due: nextDue || null },
       };
 
       const res = await fetch(`${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth`, {
@@ -243,10 +217,7 @@ export default function VaccinationsPage() {
             </div>
           </div>
 
-          <button
-            onClick={add}
-            className="mt-4 w-full rounded-xl bg-black px-4 py-3 font-semibold text-white"
-          >
+          <button onClick={add} className="mt-4 w-full rounded-xl bg-black px-4 py-3 font-semibold text-white">
             Sačuvaj vakcinu
           </button>
         </div>
@@ -262,27 +233,23 @@ export default function VaccinationsPage() {
           ) : (
             <div className="mt-4 space-y-3">
               {sorted.map((x) => {
-                const v = pickVet(x);
-                const c = pickClinic(x);
-                const nd = pickNextDue(x);
+                const vet = x.vet_name ?? x.meta?.vet ?? null;
+                const clinicText = x.clinic ?? null;
 
                 return (
                   <div key={x.id} className="rounded-2xl border p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-semibold">{x.title}</div>
-
                         <div className="mt-1 text-sm text-gray-600">
                           {x.date ? `Datum: ${x.date}` : "Datum: -"}
-                          {v ? ` • Vet: ${v}` : ""}
-                          {c ? ` • Klinika: ${c}` : ""}
-                          {nd ? ` • Sledeća: ${nd}` : ""}
+                          {vet ? ` • Vet: ${vet}` : ""}
+                          {clinicText ? ` • Klinika: ${clinicText}` : ""}
+                          {x.meta?.next_due ? ` • Sledeća: ${x.meta.next_due}` : ""}
                         </div>
 
                         {x.notes ? (
-                          <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
-                            {x.notes}
-                          </div>
+                          <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{x.notes}</div>
                         ) : null}
                       </div>
 
