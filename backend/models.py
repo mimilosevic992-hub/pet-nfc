@@ -106,9 +106,10 @@ class HealthEntry(Base):
     allergen = Column(String, nullable=True)
     reaction = Column(String, nullable=True)
 
-    weight_kg = Column(String, nullable=True)
-    dosage = Column(String, nullable=True)
-    duration_days = Column(Integer, nullable=True)
+    next_due = Column(String, nullable=True)      # ✅ VACCINATIONS
+    weight_kg = Column(String, nullable=True)     # CHECKUPS
+    dosage = Column(String, nullable=True)        # TREATMENTS
+    duration_days = Column(Integer, nullable=True)# TREATMENTS
 
     # ako je nastalo iz podsetnika (za ALLERGY mora ostati NULL)
     source_reminder_id = Column(

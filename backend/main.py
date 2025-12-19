@@ -42,35 +42,24 @@ templates = Jinja2Templates(directory="templates")
 Base.metadata.create_all(bind=engine)
 
 @app.on_event("startup")
-def _startup_migrate_fk():
-    # Ovaj blok se izvršava na startu servisa na Renderu
-    # i popravlja FK tako da brisanje reminders ne puca.
+def _auto_migrate_health_entries():
+    # dodaj kolonu next_due ako ne postoji (Postgres)
     try:
-        with engine.begin() as conn:
-            # 1) source_reminder_id mora biti nullable
-            conn.execute(text("ALTER TABLE health_entries ALTER COLUMN source_reminder_id DROP NOT NULL;"))
-
-            # 2) drop FK constraint (ako postoji)
-            conn.execute(text("ALTER TABLE health_entries DROP CONSTRAINT IF EXISTS health_entries_source_reminder_id_fkey;"))
-
-            # 3) add FK sa ON DELETE SET NULL (ako već postoji, skip)
-            exists = conn.execute(text("""
-                SELECT 1
-                FROM pg_constraint
-                WHERE conname = 'health_entries_source_reminder_id_fkey'
-            """)).scalar()
-
-            if not exists:
-                conn.execute(text("""
-                    ALTER TABLE health_entries
-                    ADD CONSTRAINT health_entries_source_reminder_id_fkey
-                    FOREIGN KEY (source_reminder_id)
-                    REFERENCES reminders(id)
-                    ON DELETE SET NULL
-                """))
+        db = SessionLocal()
+        db.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS next_due VARCHAR"))
+        db.commit()
     except Exception as e:
-        # Ne rušimo app ako migracija ne prođe (npr. prva tabela još ne postoji)
-        print("startup migration skipped/failed:", repr(e))
+        # ne rušimo app ako je već ok
+        try:
+            db.rollback()
+        except:
+            pass
+        print("Auto-migrate warning:", e)
+    finally:
+        try:
+            db.close()
+        except:
+            pass
 
 def ensure_health_entry_columns():
     with engine.begin() as conn:
@@ -172,12 +161,18 @@ class ReminderCreateRequest(BaseModel):
 
 
 class ReminderCompleteRequest(BaseModel):
-    section: Optional[str] = None  # može da dođe, ali nije obavezno
+    section: Optional[str] = None
     date: str
     title: str
     notes: str | None = None
     vet_name: str | None = None
     clinic: str | None = None
+
+    # ✅ dodatna polja po sekciji
+    next_due: str | None = None         # VACCINATIONS
+    weight_kg: str | None = None        # CHECKUPS
+    dosage: str | None = None           # TREATMENTS
+    duration_days: int | None = None    # TREATMENTS
 
 # =========================
 # Basic
@@ -918,7 +913,6 @@ def complete_reminder_auth(
     if not pet or pet.owner_email != current_user.email:
         raise HTTPException(status_code=403, detail="Nemaš pristup.")
 
-    # ✅ mapiramo tip podsetnika -> sekcija zdravstvenog kartona
     SECTION_BY_TYPE = {
         "VACCINE": "VACCINATIONS",
         "CHECKUP": "CHECKUPS",
@@ -929,23 +923,20 @@ def complete_reminder_auth(
     if not section:
         raise HTTPException(status_code=400, detail=f"Nepoznat tip podsetnika: {r.type}")
 
-    # ✅ alergije nikad iz podsetnika (pravilo)
-    # ako frontend pošalje ALLERGY, ignorišemo i ostaje section iz mape
+    # alergije nikad iz podsetnika
     if payload.section and payload.section.strip().upper() == "ALLERGY":
         raise HTTPException(status_code=400, detail="Alergije ne mogu nastati iz podsetnika.")
 
-    # (opciono) ako frontend pošalje sekciju koja se ne slaže, ignorišemo je
-    # ali možemo ostaviti "soft check" za debug
+    # (soft) ignorišemo payload.section ako se ne slaže
     if payload.section:
         sent = payload.section.strip().upper()
         if sent != section:
-            # samo ignorišemo - backend odlučuje finalno
             pass
 
     entry = HealthEntry(
         pet_id=r.pet_id,
         section=section,
-        date=payload.date,          # ako ti je u modelu Date, ti već radiš parsing u create_health_entry; ovde ostaje kako je bilo
+        date=payload.date,
         title=payload.title,
         notes=payload.notes,
         vet_name=payload.vet_name,
@@ -955,21 +946,23 @@ def complete_reminder_auth(
         source_reminder_id=r.id,
     )
 
+    # ✅ upis dodatnih polja po sekciji
+    if section == "VACCINATIONS":
+        entry.next_due = payload.next_due
+
+    elif section == "CHECKUPS":
+        entry.weight_kg = payload.weight_kg
+
+    elif section == "TREATMENTS":
+        entry.dosage = payload.dosage
+        entry.duration_days = payload.duration_days
+
     db.add(entry)
-
-    # ✅ bitno: ako health_entries imaju FK na reminders, mora prvo null / cascade.
-    # Pošto si već rešio raniji FK problem, ovde ostaje delete.
     db.delete(r)
-
     db.commit()
     db.refresh(entry)
 
-    return {
-        "ok": True,
-        "health_entry_id": entry.id,
-        "section": section,
-    }
-
+    return {"ok": True, "health_entry_id": entry.id, "section": section}
 
 @app.delete("/reminders/{reminder_id}_auth")
 def delete_reminder_auth(
