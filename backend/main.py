@@ -912,10 +912,9 @@ def complete_reminder_auth(
     # ✅ mapiramo tip podsetnika -> sekcija zdravstvenog kartona
     SECTION_BY_TYPE = {
         "VACCINE": "VACCINATIONS",
-        "CHECKUP": "CHECKUP",
-        "THERAPY": "THERAPY",
+        "CHECKUP": "CHECKUPS",
+        "THERAPY": "TREATMENTS",
     }
-
     rt = (r.type or "").strip().upper()
     section = SECTION_BY_TYPE.get(rt)
     if not section:
