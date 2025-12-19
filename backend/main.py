@@ -152,6 +152,11 @@ class HealthEntryCreateRequest(BaseModel):
     allergen: str | None = None
     reaction: str | None = None
 
+    next_due: str | None = None         # VACCINATIONS
+    weight_kg: str | None = None        # CHECKUPS
+    dosage: str | None = None           # TREATMENTS
+    duration_days: int | None = None    # TREATMENTS
+
 
 class ReminderCreateRequest(BaseModel):
     type: str  # VACCINE | CHECKUP | THERAPY
@@ -752,20 +757,25 @@ def list_health_entries_auth(
     items = q.order_by(HealthEntry.date.desc(), HealthEntry.id.desc()).limit(2000).all()
     return [
         {
-            "id": x.id,
-            "pet_id": x.pet_id,
-            "section": x.section,
-            "date": x.date,
-            "title": x.title,
-            "notes": x.notes,
-            "vet_name": x.vet_name,
-            "clinic": x.clinic,
-            "allergen": x.allergen,
-            "reaction": x.reaction,
-            "source_reminder_id": x.source_reminder_id,
+            "id": e.id,
+            "section": e.section,
+            "date": e.date,
+            "title": e.title,
+            "notes": e.notes,
+            "vet_name": e.vet_name,
+            "clinic": e.clinic,
+
+            # ✅ dodatna polja
+            "next_due": e.next_due,
+            "weight_kg": e.weight_kg,
+            "dosage": e.dosage,
+            "duration_days": e.duration_days,
+
+            "source_reminder_id": e.source_reminder_id,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
         }
-        for x in items
-    ]
+        for e in items
+        ]
 
 
 @app.post("/pets/{pet_id}/health_auth")
@@ -810,6 +820,13 @@ def create_health_entry_auth(
             reaction=None,
             source_reminder_id=None,
         )
+    if section == "VACCINATIONS":
+        entry.next_due = payload.next_due
+    elif section == "CHECKUPS":
+        entry.weight_kg = payload.weight_kg
+    elif section == "TREATMENTS":
+        entry.dosage = payload.dosage
+        entry.duration_days = payload.duration_days
 
     db.add(entry)
     db.commit()
