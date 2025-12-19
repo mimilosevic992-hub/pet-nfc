@@ -107,7 +107,11 @@ class HealthEntry(Base):
     reaction = Column(String, nullable=True)
 
     # ako je nastalo iz podsetnika (za ALLERGY mora ostati NULL)
-    source_reminder_id = Column(Integer, ForeignKey("reminders.id"), nullable=True)
+    source_reminder_id = Column(
+    Integer,
+    ForeignKey("reminders.id", ondelete="SET NULL"),
+    nullable=True,
+)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

@@ -41,16 +41,37 @@ templates = Jinja2Templates(directory="templates")
 # Kreira tabele prvi put
 Base.metadata.create_all(bind=engine)
 
-def ensure_tagstatus_values():
-    # dodaje PRINTED u postgres enum tagstatus ako ne postoji
+@app.on_event("startup")
+def _startup_migrate_fk():
+    # Ovaj blok se izvršava na startu servisa na Renderu
+    # i popravlja FK tako da brisanje reminders ne puca.
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TYPE tagstatus ADD VALUE 'PRINTED'"))
-    except ProgrammingError:
-        # već postoji ili nije postgres enum u tom okruženju
-        pass
+            # 1) source_reminder_id mora biti nullable
+            conn.execute(text("ALTER TABLE health_entries ALTER COLUMN source_reminder_id DROP NOT NULL;"))
 
-ensure_tagstatus_values()
+            # 2) drop FK constraint (ako postoji)
+            conn.execute(text("ALTER TABLE health_entries DROP CONSTRAINT IF EXISTS health_entries_source_reminder_id_fkey;"))
+
+            # 3) add FK sa ON DELETE SET NULL (ako već postoji, skip)
+            exists = conn.execute(text("""
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'health_entries_source_reminder_id_fkey'
+            """)).scalar()
+
+            if not exists:
+                conn.execute(text("""
+                    ALTER TABLE health_entries
+                    ADD CONSTRAINT health_entries_source_reminder_id_fkey
+                    FOREIGN KEY (source_reminder_id)
+                    REFERENCES reminders(id)
+                    ON DELETE SET NULL
+                """))
+    except Exception as e:
+        # Ne rušimo app ako migracija ne prođe (npr. prva tabela još ne postoji)
+        print("startup migration skipped/failed:", repr(e))
+
 
 def get_db():
     db = SessionLocal()
