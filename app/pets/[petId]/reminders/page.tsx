@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
 
@@ -15,7 +15,7 @@ type ReminderRow = {
   status: "upcoming" | "today" | "overdue" | string;
 };
 
-type HealthSection = "VACCINATIONS" | "CHECKUPS" | "TREATMENTS" | "ALLERGIES" | "NOTES";
+type HealthSection = "VACCINATIONS" | "CHECKUPS" | "TREATMENTS";
 
 type CompletePayload = {
   section: HealthSection;
@@ -25,12 +25,12 @@ type CompletePayload = {
   vet_name?: string | null;
   clinic?: string | null;
 
-  // CHECKUPS
-  weight_kg?: string | null;
+  // dodatna polja
+  next_due?: string | null;        // VACCINATIONS
+  weight_kg?: string | null;       // CHECKUPS
+  dosage?: string | null;          // TREATMENTS
+  duration_days?: number | null;   // TREATMENTS
 
-  // TREATMENTS
-  dosage?: string | null;
-  duration_days?: number | null;
 };
 
 function mapReminderTypeToSection(t: string): HealthSection {
@@ -49,13 +49,11 @@ function badge(status: string) {
 
 export default function PetRemindersPage() {
   const params = useParams();
-  const router = useRouter();
 
   const petId = useMemo(() => {
     const raw = (params as any)?.petId;
     const v = Array.isArray(raw) ? raw[0] : raw;
-    const n = v ? Number(v) : NaN;
-    return Number.isFinite(n) ? n : null;
+    return v ? Number(v) : null;
   }, [params]);
 
   const [items, setItems] = useState<ReminderRow[]>([]);
@@ -73,6 +71,7 @@ export default function PetRemindersPage() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeId, setCompleteId] = useState<number | null>(null);
   const [completeType, setCompleteType] = useState<string>("VACCINE");
+
   const [cp, setCp] = useState<CompletePayload>({
     section: "VACCINATIONS",
     date: new Date().toISOString().slice(0, 10),
@@ -80,6 +79,7 @@ export default function PetRemindersPage() {
     notes: "",
     vet_name: "",
     clinic: "",
+    next_due: "",
     weight_kg: "",
     dosage: "",
     duration_days: null,
@@ -87,7 +87,6 @@ export default function PetRemindersPage() {
 
   async function load() {
     if (!petId) return;
-
     setLoading(true);
     setErr(null);
     setMsg(null);
@@ -113,7 +112,6 @@ export default function PetRemindersPage() {
 
   async function createReminder() {
     if (!petId) return;
-
     setLoading(true);
     setErr(null);
     setMsg(null);
@@ -128,8 +126,8 @@ export default function PetRemindersPage() {
         body: JSON.stringify({
           type: rtype,
           date: rdate,
-          title: rtitle.trim(),
-          notes: rnotes.trim() || null,
+          title: rtitle,
+          notes: rnotes || null,
         }),
       });
 
@@ -186,6 +184,7 @@ export default function PetRemindersPage() {
       notes: r.notes ?? "",
       vet_name: "",
       clinic: "",
+      next_due: "",
       weight_kg: "",
       dosage: "",
       duration_days: null,
@@ -210,37 +209,37 @@ export default function PetRemindersPage() {
       const token = localStorage.getItem("petnfc_token");
       if (!token) throw new Error("Nisi ulogovan.");
 
-      // Frontend guard: čisto UX (backend treba da bude autoritet)
+      // Backend mora da odlučuje finalno, ali mi šaljemo tačna polja
       const expected = mapReminderTypeToSection(completeType);
       if (cp.section !== expected) {
         throw new Error(`Sekcija mora biti ${expected} za tip ${completeType}.`);
       }
 
-      const body: any = {
+      const payload: any = {
         section: cp.section,
         date: cp.date,
-        title: cp.title.trim(),
-        notes: cp.notes?.trim() || null,
-        vet_name: cp.vet_name?.trim() || null,
-        clinic: cp.clinic?.trim() || null,
+        title: cp.title,
+        notes: cp.notes || null,
+        vet_name: cp.vet_name || null,
+        clinic: cp.clinic || null,
       };
 
-      // dodatna polja po sekciji
+      // dodatna polja po tipu
+      if (cp.section === "VACCINATIONS") {
+        payload.next_due = cp.next_due || null;
+      }
       if (cp.section === "CHECKUPS") {
-        body.weight_kg = cp.weight_kg?.trim() || null;
+        payload.weight_kg = cp.weight_kg || null;
       }
       if (cp.section === "TREATMENTS") {
-        body.dosage = cp.dosage?.trim() || null;
-        body.duration_days =
-          typeof cp.duration_days === "number" && Number.isFinite(cp.duration_days)
-            ? cp.duration_days
-            : null;
+        payload.dosage = cp.dosage || null;
+        payload.duration_days = cp.duration_days ?? null;
       }
 
       const res = await fetch(`${API_BASE}/reminders/${completeId}/complete_auth`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -256,11 +255,6 @@ export default function PetRemindersPage() {
   }
 
   useEffect(() => {
-    const token = localStorage.getItem("petnfc_token");
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
     if (!petId) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -288,7 +282,9 @@ export default function PetRemindersPage() {
             </a>
           </div>
 
-          {msg && <div className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-800">{msg}</div>}
+          {msg && (
+            <div className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-800">{msg}</div>
+          )}
           {err && (
             <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
               {err}
@@ -346,7 +342,7 @@ export default function PetRemindersPage() {
 
           <button
             onClick={createReminder}
-            disabled={loading || !rtitle.trim() || !rdate}
+            disabled={loading || !rtitle || !rdate}
             className="mt-4 w-full rounded-xl bg-black px-4 py-3 font-semibold text-white disabled:opacity-40"
           >
             {loading ? "..." : "Sačuvaj podsetnik"}
@@ -381,7 +377,9 @@ export default function PetRemindersPage() {
                         <span className="text-xs text-gray-600">• {r.type}</span>
                       </div>
                       <div className="font-semibold">{r.title}</div>
-                      {r.notes && <div className="text-sm text-gray-700 whitespace-pre-wrap">{r.notes}</div>}
+                      {r.notes && (
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap">{r.notes}</div>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
@@ -437,7 +435,7 @@ export default function PetRemindersPage() {
                   <input
                     type="date"
                     className="mt-1 w-full rounded-xl border px-3 py-2"
-                    value={cp.date ?? ""}
+                    value={cp.date || ""}
                     onChange={(e) => setCp((p) => ({ ...p, date: e.target.value }))}
                   />
                 </div>
@@ -479,10 +477,22 @@ export default function PetRemindersPage() {
                   />
                 </div>
 
-                {/* EXTRA POLJA PO SEKCIJI */}
+                {/* dodatna polja po sekciji */}
+                {cp.section === "VACCINATIONS" && (
+                  <div className="sm:col-span-2">
+                    <label className="text-sm font-medium">Sledeća doza (opciono)</label>
+                    <input
+                      type="date"
+                      className="mt-1 w-full rounded-xl border px-3 py-2"
+                      value={cp.next_due ?? ""}
+                      onChange={(e) => setCp((p) => ({ ...p, next_due: e.target.value }))}
+                    />
+                  </div>
+                )}
+
                 {cp.section === "CHECKUPS" && (
                   <div className="sm:col-span-2">
-                    <label className="text-sm font-medium">Težina (kg)</label>
+                    <label className="text-sm font-medium">Težina (kg) (opciono)</label>
                     <input
                       className="mt-1 w-full rounded-xl border px-3 py-2"
                       value={cp.weight_kg ?? ""}
@@ -495,16 +505,16 @@ export default function PetRemindersPage() {
                 {cp.section === "TREATMENTS" && (
                   <>
                     <div>
-                      <label className="text-sm font-medium">Doza</label>
+                      <label className="text-sm font-medium">Doza (opciono)</label>
                       <input
                         className="mt-1 w-full rounded-xl border px-3 py-2"
                         value={cp.dosage ?? ""}
                         onChange={(e) => setCp((p) => ({ ...p, dosage: e.target.value }))}
-                        placeholder="npr. 2ml / 1 tableta"
+                        placeholder="npr. 2x dnevno"
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium">Trajanje (dana)</label>
+                      <label className="text-sm font-medium">Trajanje (dani) (opciono)</label>
                       <input
                         type="number"
                         className="mt-1 w-full rounded-xl border px-3 py-2"
@@ -524,7 +534,7 @@ export default function PetRemindersPage() {
 
               <button
                 onClick={completeReminder}
-                disabled={loading || !cp.title.trim() || !cp.date}
+                disabled={loading || !cp.title || !cp.date}
                 className="mt-4 w-full rounded-xl bg-black px-4 py-3 font-semibold text-white disabled:opacity-40"
               >
                 {loading ? "..." : "Završi i upiši u karton"}
@@ -540,3 +550,6 @@ export default function PetRemindersPage() {
     </div>
   );
 }
+
+// osigurač za Next/TS glitch
+export {};

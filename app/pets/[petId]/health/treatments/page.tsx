@@ -16,6 +16,8 @@ type Entry = {
   vet_name?: string | null;
   clinic?: string | null;
   meta?: any;
+  dosage?: string | null;
+  duration_days?: number | null;
 };
 
 export default function TreatmentsPage() {
@@ -73,10 +75,8 @@ export default function TreatmentsPage() {
         notes: notes.trim() || null,
         vet_name: vetName.trim() || null,
         clinic: clinic.trim() || null,
-        meta: {
-          dose: dose.trim() || null,
-          duration_days: durationDays ? Number(durationDays) : null,
-        },
+        dosage: dose.trim() || null,
+        duration_days: durationDays ? Number(durationDays) : null,
       };
 
       const res = await fetch(`${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth`, {
@@ -255,8 +255,8 @@ export default function TreatmentsPage() {
                       <div className="font-semibold">{x.title}</div>
                       <div className="mt-1 text-sm text-gray-600">
                         {x.date ? `Početak: ${x.date}` : "Početak: -"}
-                        {x.meta?.dose ? ` • Doza: ${x.meta.dose}` : ""}
-                        {x.meta?.duration_days ? ` • Trajanje: ${x.meta.duration_days} dana` : ""}
+                        {x.dosage ? ` • Doza: ${x.dosage}` : ""}
+                        {x.duration_days ? ` • Trajanje: ${x.duration_days} dana` : ""}
                         {x.vet_name ? ` • Vet: ${x.vet_name}` : ""}
                         {x.clinic ? ` • Klinika: ${x.clinic}` : ""}
                       </div>

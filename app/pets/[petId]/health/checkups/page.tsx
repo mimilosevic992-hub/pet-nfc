@@ -16,6 +16,7 @@ type Entry = {
   vet_name?: string | null;
   clinic?: string | null;
   meta?: any;
+  weight_kg?: string | null;
 };
 
 export default function CheckupsPage() {
@@ -72,7 +73,7 @@ export default function CheckupsPage() {
         notes: notes.trim() || null,
         vet_name: vetName.trim() || null,
         clinic: clinic.trim() || null,
-        meta: { weight_kg: weight ? Number(weight) : null },
+        weight_kg: weight.trim() || null,
       };
 
       const res = await fetch(`${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth`, {
@@ -243,7 +244,7 @@ export default function CheckupsPage() {
                         {x.date ? `Datum: ${x.date}` : "Datum: -"}
                         {x.vet_name ? ` • Vet: ${x.vet_name}` : ""}
                         {x.clinic ? ` • Klinika: ${x.clinic}` : ""}
-                        {x.meta?.weight_kg ? ` • Težina: ${x.meta.weight_kg} kg` : ""}
+                        {x.weight_kg ? ` • Težina: ${x.weight_kg} kg` : ""}
                       </div>
                       {x.notes ? (
                         <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{x.notes}</div>
