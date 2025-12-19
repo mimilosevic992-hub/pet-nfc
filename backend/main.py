@@ -19,7 +19,7 @@ from enum import Enum
 from db import Base, engine, SessionLocal  # tvoj db.py
 from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User, HealthEntry, Reminder  # tvoj models.py
 from auth import hash_password, verify_password, create_access_token, get_current_user
-from typing import List
+from typing import List, Optional
 
 app = FastAPI(title="Pet NFC API")
 
@@ -163,9 +163,8 @@ class ReminderCreateRequest(BaseModel):
 
 
 class ReminderCompleteRequest(BaseModel):
-    # kada se završi podsetnik, pravimo entry u health kartonu
-    section: str  # mora da odgovara reminder type-u (vakcina/pregled/terapija)
-    date: str     # default isti datum, ali možeš prepraviti u formi
+    section: Optional[str] = None  # može da dođe, ali nije obavezno
+    date: str
     title: str
     notes: str | None = None
     vet_name: str | None = None
@@ -910,24 +909,35 @@ def complete_reminder_auth(
     if not pet or pet.owner_email != current_user.email:
         raise HTTPException(status_code=403, detail="Nemaš pristup.")
 
-    section = payload.section.strip().upper()
-    if section == "ALLERGY":
+    # ✅ mapiramo tip podsetnika -> sekcija zdravstvenog kartona
+    SECTION_BY_TYPE = {
+        "VACCINE": "VACCINATION",
+        "CHECKUP": "CHECKUP",
+        "THERAPY": "THERAPY",
+    }
+
+    rt = (r.type or "").strip().upper()
+    section = SECTION_BY_TYPE.get(rt)
+    if not section:
+        raise HTTPException(status_code=400, detail=f"Nepoznat tip podsetnika: {r.type}")
+
+    # ✅ alergije nikad iz podsetnika (pravilo)
+    # ako frontend pošalje ALLERGY, ignorišemo i ostaje section iz mape
+    if payload.section and payload.section.strip().upper() == "ALLERGY":
         raise HTTPException(status_code=400, detail="Alergije ne mogu nastati iz podsetnika.")
 
-    # osnovna validacija usklađenosti tipa
-    # (nije hard block, ali pomaže da ne upišemo vakcinu kao terapiju)
-    rt = r.type.upper()
-    if rt == "VACCINE" and section != "VACCINATION":
-        raise HTTPException(status_code=400, detail="Za tip VACCINE sekcija mora biti VACCINATION.")
-    if rt == "CHECKUP" and section != "CHECKUP":
-        raise HTTPException(status_code=400, detail="Za tip CHECKUP sekcija mora biti CHECKUP.")
-    if rt == "THERAPY" and section != "THERAPY":
-        raise HTTPException(status_code=400, detail="Za tip THERAPY sekcija mora biti THERAPY.")
+    # (opciono) ako frontend pošalje sekciju koja se ne slaže, ignorišemo je
+    # ali možemo ostaviti "soft check" za debug
+    if payload.section:
+        sent = payload.section.strip().upper()
+        if sent != section:
+            # samo ignorišemo - backend odlučuje finalno
+            pass
 
     entry = HealthEntry(
         pet_id=r.pet_id,
         section=section,
-        date=payload.date,
+        date=payload.date,          # ako ti je u modelu Date, ti već radiš parsing u create_health_entry; ovde ostaje kako je bilo
         title=payload.title,
         notes=payload.notes,
         vet_name=payload.vet_name,
@@ -938,11 +948,19 @@ def complete_reminder_auth(
     )
 
     db.add(entry)
-    db.delete(r)  # podsetnik se briše kad se završi
+
+    # ✅ bitno: ako health_entries imaju FK na reminders, mora prvo null / cascade.
+    # Pošto si već rešio raniji FK problem, ovde ostaje delete.
+    db.delete(r)
+
     db.commit()
     db.refresh(entry)
 
-    return {"ok": True, "health_entry_id": entry.id}
+    return {
+        "ok": True,
+        "health_entry_id": entry.id,
+        "section": section,
+    }
 
 
 @app.delete("/reminders/{reminder_id}_auth")
