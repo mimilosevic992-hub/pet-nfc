@@ -13,8 +13,26 @@ type Entry = {
   title: string;
   date?: string | null;
   notes?: string | null;
+
+  // ✅ nova polja (unos iz podsetnika često ide ovde)
+  vet_name?: string | null;
+  clinic?: string | null;
+
+  // ✅ stari način (ručni unos kod tebe trenutno ide u meta)
   meta?: any;
 };
+
+function pickVet(e: Entry) {
+  return (e.vet_name ?? e.meta?.vet ?? null) as string | null;
+}
+
+function pickClinic(e: Entry) {
+  return (e.clinic ?? e.meta?.clinic ?? null) as string | null;
+}
+
+function pickNextDue(e: Entry) {
+  return (e.meta?.next_due ?? null) as string | null;
+}
 
 export default function VaccinationsPage() {
   const params = useParams();
@@ -27,7 +45,11 @@ export default function VaccinationsPage() {
 
   const [vaccineName, setVaccineName] = useState("");
   const [givenAt, setGivenAt] = useState("");
-  const [vet, setVet] = useState("");
+
+  // ✅ razdvojeno
+  const [vetName, setVetName] = useState("");
+  const [clinic, setClinic] = useState("");
+
   const [nextDue, setNextDue] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -62,28 +84,35 @@ export default function VaccinationsPage() {
       const token = localStorage.getItem("petnfc_token");
       if (!token) throw new Error("Nisi ulogovan.");
 
+      // ✅ kompatibilno: šaljemo i nova polja + meta (za legacy prikaz)
       const payload = {
         section: SECTION,
         title: vaccineName.trim(),
         date: givenAt || null,
         notes: notes.trim() || null,
-        meta: { vet: vet.trim() || null, next_due: nextDue || null },
+
+        vet_name: vetName.trim() || null,
+        clinic: clinic.trim() || null,
+
+        meta: {
+          vet: vetName.trim() || null,
+          clinic: clinic.trim() || null,
+          next_due: nextDue || null,
+        },
       };
 
-      const res = await fetch(
-        `${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) throw new Error(await res.text());
 
       setVaccineName("");
       setGivenAt("");
-      setVet("");
+      setVetName("");
+      setClinic("");
       setNextDue("");
       setNotes("");
 
@@ -173,11 +202,21 @@ export default function VaccinationsPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Veterinar / ambulanta</label>
+              <label className="text-sm font-medium">Veterinar</label>
               <input
                 className="mt-1 w-full rounded-xl border px-3 py-2"
-                value={vet}
-                onChange={(e) => setVet(e.target.value)}
+                value={vetName}
+                onChange={(e) => setVetName(e.target.value)}
+                placeholder="opciono"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Klinika / ambulanta</label>
+              <input
+                className="mt-1 w-full rounded-xl border px-3 py-2"
+                value={clinic}
+                onChange={(e) => setClinic(e.target.value)}
                 placeholder="opciono"
               />
             </div>
@@ -222,30 +261,41 @@ export default function VaccinationsPage() {
             <p className="mt-3 text-sm text-gray-600">Nema unosa.</p>
           ) : (
             <div className="mt-4 space-y-3">
-              {sorted.map((x) => (
-                <div key={x.id} className="rounded-2xl border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">{x.title}</div>
-                      <div className="mt-1 text-sm text-gray-600">
-                        {x.date ? `Datum: ${x.date}` : "Datum: -"}
-                        {x.meta?.vet ? ` • Vet: ${x.meta.vet}` : ""}
-                        {x.meta?.next_due ? ` • Sledeća: ${x.meta.next_due}` : ""}
-                      </div>
-                      {x.notes ? (
-                        <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{x.notes}</div>
-                      ) : null}
-                    </div>
+              {sorted.map((x) => {
+                const v = pickVet(x);
+                const c = pickClinic(x);
+                const nd = pickNextDue(x);
 
-                    <button
-                      onClick={() => remove(x.id)}
-                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
-                    >
-                      Obriši
-                    </button>
+                return (
+                  <div key={x.id} className="rounded-2xl border p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold">{x.title}</div>
+
+                        <div className="mt-1 text-sm text-gray-600">
+                          {x.date ? `Datum: ${x.date}` : "Datum: -"}
+                          {v ? ` • Vet: ${v}` : ""}
+                          {c ? ` • Klinika: ${c}` : ""}
+                          {nd ? ` • Sledeća: ${nd}` : ""}
+                        </div>
+
+                        {x.notes ? (
+                          <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
+                            {x.notes}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <button
+                        onClick={() => remove(x.id)}
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+                      >
+                        Obriši
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
