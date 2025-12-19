@@ -24,3 +24,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ===============================
+   Global readability improvements
+   =============================== */
+
+/* Light mode – boost muted text */
+.text-gray-400 {
+  color: #4b5563 !important; /* gray-600 */
+}
+
+.text-gray-500 {
+  color: #374151 !important; /* gray-700 */
+}
+
+.text-gray-600 {
+  color: #1f2937 !important; /* gray-800 */
+}
+
+/* Borders slightly darker on white */
+.border {
+  border-color: #d1d5db !important; /* gray-300 */
+}
+
+/* Inputs & placeholders */
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280; /* gray-500 */
+}
