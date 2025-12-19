@@ -28,31 +28,41 @@ export default function PetRemindersPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
-    setErr(null);
-    try {
-      const token = localStorage.getItem("petnfc_token");
-      if (!token) throw new Error("Nisi ulogovan.");
-
-      const res = await fetch(`${API_BASE}/pets/${petId}/reminders_auth`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-
-      if (!res.ok) throw new Error(await res.text());
-      setItems((await res.json()) as ReminderRow[]);
-    } catch (e: any) {
-      setErr(e?.message ?? "Greška");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
     if (!petId) return;
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    let alive = true;
+
+    (async () => {
+      setLoading(true);
+      setErr(null);
+
+      try {
+        const token = localStorage.getItem("petnfc_token");
+        if (!token) throw new Error("Nisi ulogovan.");
+
+        const res = await fetch(`${API_BASE}/pets/${petId}/reminders_auth`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+        const data = (await res.json()) as ReminderRow[];
+
+        if (!alive) return;
+        setItems(data);
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(e?.message ?? "Greška");
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, [petId]);
 
   if (!petId) {
@@ -84,16 +94,7 @@ export default function PetRemindersPage() {
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">Lista</h2>
-            <button
-              onClick={load}
-              disabled={loading}
-              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              {loading ? "..." : "Osveži"}
-            </button>
-          </div>
+          <h2 className="text-lg font-bold">Lista</h2>
 
           {loading ? (
             <p className="mt-3 text-sm text-gray-600">Učitavam…</p>
@@ -117,3 +118,6 @@ export default function PetRemindersPage() {
     </div>
   );
 }
+
+// Force TypeScript to always treat this file as a module, even if something weird happens in sync/merge.
+export {};
