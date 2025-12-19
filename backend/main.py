@@ -764,13 +764,16 @@ def list_health_entries_auth(
             "notes": e.notes,
             "vet_name": e.vet_name,
             "clinic": e.clinic,
+            "allergen": e.allergen,
+            "reaction": e.reaction,
+
 
             # ✅ dodatna polja
             "next_due": e.next_due,
             "weight_kg": e.weight_kg,
             "dosage": e.dosage,
             "duration_days": e.duration_days,
-
+            
             "source_reminder_id": e.source_reminder_id,
             "created_at": e.created_at.isoformat() if e.created_at else None,
         }
