@@ -20,6 +20,12 @@ from db import Base, engine, SessionLocal  # tvoj db.py
 from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User, HealthEntry, Reminder  # tvoj models.py
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from typing import List, Optional
+from io import BytesIO
+
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
 
 app = FastAPI(title="Pet NFC API")
 
@@ -1001,6 +1007,86 @@ def delete_reminder_auth(
     db.delete(r)
     db.commit()
     return {"ok": True}
+
+@app.get("/pets/{pet_id}/health_pdf_auth")
+def health_pdf_auth(
+    pet_id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(
+        Pet.id == pet_id,
+        Pet.owner_id == user.id
+    ).first()
+
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+
+    entries = (
+        db.query(HealthEntry)
+        .filter(HealthEntry.pet_id == pet_id)
+        .order_by(HealthEntry.date.desc())
+        .all()
+    )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Header
+    story.append(Paragraph("<b>Pet NFC – Zdravstveni karton</b>", styles["Title"]))
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph(f"<b>Ime:</b> {pet.name}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Vrsta:</b> {pet.species}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Godina rođenja:</b> {pet.birth_year}", styles["Normal"]))
+    story.append(Spacer(1, 16))
+
+    # Entries
+    for e in entries:
+        story.append(Paragraph(f"<b>{e.section}</b> — {e.date or '-'}", styles["Heading3"]))
+        story.append(Paragraph(e.title, styles["Normal"]))
+
+        if e.notes:
+            story.append(Paragraph(f"<i>{e.notes}</i>", styles["Normal"]))
+
+        if e.next_due:
+            story.append(Paragraph(f"Sledeća doza: {e.next_due}", styles["Normal"]))
+
+        if e.weight_kg:
+            story.append(Paragraph(f"Težina: {e.weight_kg} kg", styles["Normal"]))
+
+        if e.dosage or e.duration_days:
+            d = []
+            if e.dosage:
+                d.append(f"Doza: {e.dosage}")
+            if e.duration_days:
+                d.append(f"Trajanje: {e.duration_days} dana")
+            story.append(Paragraph(" • ".join(d), styles["Normal"]))
+
+        if e.allergen or e.reaction:
+            a = []
+            if e.allergen:
+                a.append(f"Alergen: {e.allergen}")
+            if e.reaction:
+                a.append(f"Reakcija: {e.reaction}")
+            story.append(Paragraph(" • ".join(a), styles["Normal"]))
+
+        story.append(Spacer(1, 10))
+
+    doc.build(story)
+    buffer.seek(0)
+
+    filename = f"pet-nfc-karton-{pet.name}.pdf"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
 
 
 # =========================
