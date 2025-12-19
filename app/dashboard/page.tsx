@@ -18,6 +18,17 @@ type PetRow = {
   breeding?: boolean | null;
 };
 
+type DashReminder = {
+  id: number;
+  pet_id: number;
+  pet_name: string;
+  type: "VACCINE" | "CHECKUP" | "THERAPY" | string;
+  date: string;   // YYYY-MM-DD
+  title: string;
+  notes?: string | null;
+  status: "upcoming" | "today" | "overdue" | string;
+};
+
 function initials(name: string) {
   const n = (name || "").trim();
   if (!n) return "🐾";
@@ -29,6 +40,7 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [pets, setPets] = useState<PetRow[]>([]);
+  const [upcoming, setUpcoming] = useState<DashReminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -37,6 +49,25 @@ export default function DashboardPage() {
     localStorage.removeItem("petnfc_token");
     router.push("/login");
   }
+
+  function toDate(d: string) {
+  const [y, m, dd] = d.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, dd || 1);
+}
+
+function inNext7Days(d: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const end = new Date(today);
+  end.setDate(end.getDate() + 7);
+
+  const rd = toDate(d);
+  rd.setHours(0, 0, 0, 0);
+
+  // uključuje TODAY i narednih 7 dana
+  return rd >= today && rd <= end;
+}
 
   async function loadPets() {
     setLoading(true);
@@ -60,10 +91,57 @@ export default function DashboardPage() {
 
       const data = JSON.parse(text) as PetRow[];
       setPets(data);
+      loadUpcomingReminders(data);
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadUpcomingReminders(rows: PetRow[]) {
+    try {
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) return;
+
+      const alive = rows.filter((p) => p.status !== "DECEASED");
+
+      const all = await Promise.all(
+        alive.map(async (p) => {
+          const res = await fetch(`${API_BASE}/pets/${p.pet_id}/reminders_auth`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          const text = await res.text();
+          if (!res.ok) return [];
+
+          const list = JSON.parse(text) as Array<{
+            id: number;
+            pet_id: number;
+            type: string;
+            date: string;
+            title: string;
+            notes?: string | null;
+            status: string;
+          }>;
+
+          return list.map((r) => ({
+            ...r,
+            pet_name: p.name,
+          })) as DashReminder[];
+        })
+      );
+
+      const flat = all.flat();
+
+      const filtered = flat
+        .filter((r) => inNext7Days(r.date))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      setUpcoming(filtered);
+    } catch {
+      // dashboard ne treba da "pukne" ako reminders failuje
+      setUpcoming([]);
     }
   }
 
@@ -169,6 +247,35 @@ export default function DashboardPage() {
         </div>
 
         {/* Body */}
+        {upcoming.length > 0 && (
+          <div className="rounded-2xl bg-white p-6 shadow">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">Podsetnici (narednih 7 dana)</h2>
+              <div className="text-sm text-gray-600">{upcoming.length} ukupno</div>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {upcoming.map((r) => (
+                <a
+                  key={r.id}
+                  href={`/pets/${r.pet_id}/reminders`}
+                  className="block rounded-xl border p-3 hover:bg-gray-50"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-semibold">
+                      {r.pet_name}: {r.title}
+                    </div>
+                    <div className="text-sm text-gray-600">{r.date}</div>
+                  </div>
+
+                  <div className="mt-1 text-sm text-gray-600">
+                    {r.type} • {r.status}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="rounded-2xl bg-white p-6 shadow">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold">Moji ljubimci</h2>
