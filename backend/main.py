@@ -72,6 +72,15 @@ def _startup_migrate_fk():
         # Ne rušimo app ako migracija ne prođe (npr. prva tabela još ne postoji)
         print("startup migration skipped/failed:", repr(e))
 
+def ensure_health_entry_columns():
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS weight_kg VARCHAR"))
+        conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS dosage VARCHAR"))
+        conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS duration_days INTEGER"))
+
+Base.metadata.create_all(bind=engine)
+ensure_health_entry_columns()
+
 
 def get_db():
     db = SessionLocal()
