@@ -148,20 +148,18 @@ export default function HealthHubPage() {
                 Svaka sekcija ima posebna polja. Timeline prikazuje sve unose zajedno.
               </p>
             </div>
-
-            <Link
-              href={`/pets/${petId}`}
-              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
-            >
-              ← Profil
-            </Link>
-
             <button
               onClick={downloadPdf}
               className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
             >
               📄 Preuzmi PDF
             </button>
+            <Link
+              href={`/pets/${petId}`}
+              className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+            >
+              ← Profil
+            </Link>
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">

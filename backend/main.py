@@ -1016,7 +1016,7 @@ def health_pdf_auth(
 ):
     pet = db.query(Pet).filter(
         Pet.id == pet_id,
-        Pet.owner_id == user.id
+        Pet.owner_email == user.email
     ).first()
 
     if not pet:
@@ -1040,7 +1040,7 @@ def health_pdf_auth(
 
     story.append(Paragraph(f"<b>Ime:</b> {pet.name}", styles["Normal"]))
     story.append(Paragraph(f"<b>Vrsta:</b> {pet.species}", styles["Normal"]))
-    story.append(Paragraph(f"<b>Godina rođenja:</b> {pet.birth_year}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Datum rođenja:</b> {pet.birth_date}", styles["Normal"]))
     story.append(Spacer(1, 16))
 
     # Entries
