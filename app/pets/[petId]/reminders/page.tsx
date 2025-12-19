@@ -16,7 +16,7 @@ type ReminderRow = {
 };
 
 type CompletePayload = {
-  section: "VACCINATION" | "CHECKUP" | "THERAPY";
+  section: "VACCINATIONS" | "CHECKUP" | "THERAPY";
   date: string;
   title: string;
   notes: string;
@@ -26,7 +26,7 @@ type CompletePayload = {
 
 function mapReminderTypeToSection(t: string): CompletePayload["section"] {
   const u = (t || "").toUpperCase();
-  if (u === "VACCINE") return "VACCINATION";
+  if (u === "VACCINE") return "VACCINATIONS";
   if (u === "CHECKUP") return "CHECKUP";
   return "THERAPY";
 }
@@ -63,7 +63,7 @@ export default function PetRemindersPage() {
   const [completeId, setCompleteId] = useState<number | null>(null);
   const [completeType, setCompleteType] = useState<string>("VACCINE");
   const [cp, setCp] = useState<CompletePayload>({
-    section: "VACCINATION",
+    section: "VACCINATIONS",
     date: new Date().toISOString().slice(0, 10),
     title: "",
     notes: "",
