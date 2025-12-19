@@ -130,6 +130,14 @@ export default function PetProfilePage() {
                 </a>
               )}
             </div>
+            <div className="flex gap-2">
+              <a className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100" href={`/pets/${petId}/health`}>
+                Zdravlje
+              </a>
+              <a className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100" href={`/pets/${petId}/reminders`}>
+                Podsetnici
+              </a>
+            </div>
           </div>
 
           {loading && <p className="mt-4 text-sm text-gray-600">Učitavam…</p>}
