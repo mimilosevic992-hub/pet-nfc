@@ -13,9 +13,11 @@ type Entry = {
   title: string;
   date?: string | null;
   notes?: string | null;
+
+  // nova polja (kolone u health_entries)
   vet_name?: string | null;
   clinic?: string | null;
-  meta?: any;
+  next_due?: string | null;
 };
 
 export default function VaccinationsPage() {
@@ -43,7 +45,7 @@ export default function VaccinationsPage() {
       if (!token) throw new Error("Nisi ulogovan.");
 
       const res = await fetch(
-        `${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth?section=${SECTION}`,
+        `${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth?section=${encodeURIComponent(SECTION)}`,
         { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
       );
 
@@ -65,6 +67,7 @@ export default function VaccinationsPage() {
       const token = localStorage.getItem("petnfc_token");
       if (!token) throw new Error("Nisi ulogovan.");
 
+      // ✅ šaljemo direktno kolone koje backend čuva
       const payload = {
         section: SECTION,
         title: vaccineName.trim(),
@@ -72,7 +75,7 @@ export default function VaccinationsPage() {
         notes: notes.trim() || null,
         vet_name: vetName.trim() || null,
         clinic: clinic.trim() || null,
-        meta: { next_due: nextDue || null },
+        next_due: nextDue || null,
       };
 
       const res = await fetch(`${API_BASE}/pets/${encodeURIComponent(petId)}/health_auth`, {
@@ -217,7 +220,10 @@ export default function VaccinationsPage() {
             </div>
           </div>
 
-          <button onClick={add} className="mt-4 w-full rounded-xl bg-black px-4 py-3 font-semibold text-white">
+          <button
+            onClick={add}
+            className="mt-4 w-full rounded-xl bg-black px-4 py-3 font-semibold text-white"
+          >
             Sačuvaj vakcinu
           </button>
         </div>
@@ -232,37 +238,32 @@ export default function VaccinationsPage() {
             <p className="mt-3 text-sm text-gray-600">Nema unosa.</p>
           ) : (
             <div className="mt-4 space-y-3">
-              {sorted.map((x) => {
-                const vet = x.vet_name ?? x.meta?.vet ?? null;
-                const clinicText = x.clinic ?? null;
-
-                return (
-                  <div key={x.id} className="rounded-2xl border p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{x.title}</div>
-                        <div className="mt-1 text-sm text-gray-600">
-                          {x.date ? `Datum: ${x.date}` : "Datum: -"}
-                          {vet ? ` • Vet: ${vet}` : ""}
-                          {clinicText ? ` • Klinika: ${clinicText}` : ""}
-                          {x.meta?.next_due ? ` • Sledeća: ${x.meta.next_due}` : ""}
-                        </div>
-
-                        {x.notes ? (
-                          <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{x.notes}</div>
-                        ) : null}
+              {sorted.map((x) => (
+                <div key={x.id} className="rounded-2xl border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{x.title}</div>
+                      <div className="mt-1 text-sm text-gray-600">
+                        {x.date ? `Datum: ${x.date}` : "Datum: -"}
+                        {x.vet_name ? ` • Vet: ${x.vet_name}` : ""}
+                        {x.clinic ? ` • Klinika: ${x.clinic}` : ""}
+                        {x.next_due ? ` • Sledeća: ${x.next_due}` : ""}
                       </div>
 
-                      <button
-                        onClick={() => remove(x.id)}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
-                      >
-                        Obriši
-                      </button>
+                      {x.notes ? (
+                        <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{x.notes}</div>
+                      ) : null}
                     </div>
+
+                    <button
+                      onClick={() => remove(x.id)}
+                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+                    >
+                      Obriši
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
