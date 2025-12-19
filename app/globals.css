@@ -52,3 +52,32 @@ input::placeholder,
 textarea::placeholder {
   color: #6b7280; /* gray-500 */
 }
+
+/* ===============================
+   Global readability improvements
+   =============================== */
+
+/* Light mode – boost muted text (Tailwind gray scale) */
+.text-gray-100 { color: #6b7280 !important; } /* -> gray-500 */
+.text-gray-200 { color: #6b7280 !important; } /* -> gray-500 */
+.text-gray-300 { color: #4b5563 !important; } /* -> gray-600 */
+
+.text-gray-400 { color: #4b5563 !important; } /* -> gray-600 */
+.text-gray-500 { color: #374151 !important; } /* -> gray-700 */
+.text-gray-600 { color: #1f2937 !important; } /* -> gray-800 */
+
+/* Borders slightly darker on white */
+.border { border-color: #d1d5db !important; } /* gray-300 */
+
+/* Inputs & placeholders */
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280; /* gray-500 */
+}
+
+/* Optional: make link text a bit darker if you use gray links */
+a.text-gray-300,
+a.text-gray-400,
+a.text-gray-500 {
+  color: #1f2937 !important;
+}
