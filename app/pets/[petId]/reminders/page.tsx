@@ -19,9 +19,9 @@ type CompletePayload = {
   section: "VACCINATIONS" | "CHECKUP" | "THERAPY";
   date: string;
   title: string;
-  notes: string;
-  vet_name: string;
-  clinic: string;
+  notes?: string;
+  vet_name?: string;
+  clinic?: string;
 };
 
 function mapReminderTypeToSection(t: string): CompletePayload["section"] {

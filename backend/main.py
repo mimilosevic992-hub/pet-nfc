@@ -911,7 +911,7 @@ def complete_reminder_auth(
 
     # ✅ mapiramo tip podsetnika -> sekcija zdravstvenog kartona
     SECTION_BY_TYPE = {
-        "VACCINE": "VACCINATION",
+        "VACCINE": "VACCINATIONS",
         "CHECKUP": "CHECKUP",
         "THERAPY": "THERAPY",
     }
