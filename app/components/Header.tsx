@@ -59,12 +59,12 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b bg-white backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setOpen(true)}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
               aria-label="Open menu"
             >
               ☰
@@ -72,7 +72,7 @@ export default function Header() {
 
             <button
               onClick={() => go(isAuthed ? "/dashboard" : "/")}
-              className="text-base font-bold"
+              className="text-base font-bold text-gray-900"
               aria-label="Go home"
             >
               Pet NFC
@@ -84,7 +84,7 @@ export default function Header() {
               <>
                 <button
                   onClick={() => go("/dashboard")}
-                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                  className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
                 >
                   Dashboard
                 </button>
@@ -99,7 +99,7 @@ export default function Header() {
               <>
                 <button
                   onClick={() => go("/login")}
-                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                  className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
                 >
                   Login
                 </button>
@@ -135,7 +135,7 @@ export default function Header() {
           <div className="font-bold">Meni</div>
           <button
             onClick={() => setOpen(false)}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+            className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
             aria-label="Close menu"
           >
             ✕
@@ -192,7 +192,7 @@ function MenuBtn({
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-xl border px-4 py-3 text-left text-sm font-semibold hover:bg-gray-50"
+      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm font-semibold text-gray-900 hover:bg-gray-100"
     >
       {children}
     </button>
