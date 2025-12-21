@@ -183,7 +183,7 @@ export default function Header() {
 }
 
 function MenuBtn({
-  children,
+  children, 
   onClick,
 }: {
   children: React.ReactNode;

@@ -17,7 +17,7 @@ import secrets
 import string
 from enum import Enum
 from db import Base, engine, SessionLocal  # tvoj db.py
-from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User, HealthEntry, Reminder  # tvoj models.py
+from models import Tag, TagStatus, Pet, PetStatus, OwnerProfile, User, HealthEntry, Reminder, TagScan  # tvoj models.py
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from typing import List, Optional
 from io import BytesIO
@@ -48,33 +48,33 @@ templates = Jinja2Templates(directory="templates")
 Base.metadata.create_all(bind=engine)
 
 @app.on_event("startup")
-def _auto_migrate_health_entries():
-    # dodaj kolonu next_due ako ne postoji (Postgres)
+def _auto_migrate():
+    """
+    Lightweight schema migrations for free Render (no DB console).
+    Safe to run repeatedly (IF NOT EXISTS).
+    """
     try:
-        db = SessionLocal()
-        db.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS next_due VARCHAR"))
-        db.commit()
+        # 1) Create new tables (safe)
+        Base.metadata.create_all(bind=engine)
+
+        # 2) Add missing columns safely
+        with engine.begin() as conn:
+            # health_entries additions
+            conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS next_due VARCHAR"))
+            conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS weight_kg VARCHAR"))
+            conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS dosage VARCHAR"))
+            conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS duration_days INTEGER"))
+
+            # pets additions
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS is_breeding BOOLEAN NOT NULL DEFAULT FALSE"))
+
+            # (Optional but useful) indexes for scans if table exists
+            # These will fail if table doesn't exist yet, but create_all happens first.
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tag_scans_pet_id ON tag_scans(pet_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tag_scans_created_at ON tag_scans(created_at)"))
+
     except Exception as e:
-        # ne rušimo app ako je već ok
-        try:
-            db.rollback()
-        except:
-            pass
-        print("Auto-migrate warning:", e)
-    finally:
-        try:
-            db.close()
-        except:
-            pass
-
-def ensure_health_entry_columns():
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS weight_kg VARCHAR"))
-        conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS dosage VARCHAR"))
-        conn.execute(text("ALTER TABLE health_entries ADD COLUMN IF NOT EXISTS duration_days INTEGER"))
-
-Base.metadata.create_all(bind=engine)
-ensure_health_entry_columns()
+        print("Auto-migrate warning:", repr(e))
 
 
 def get_db():
@@ -1094,7 +1094,7 @@ def health_pdf_auth(
 # =========================
 
 @app.get("/api/t/{tag_id}")
-def public_tag_view(tag_id: str, db: Session = Depends(get_db)):
+def public_tag_view(tag_id: str, request: Request, db: Session = Depends(get_db)):
     tag = db.query(Tag).filter(Tag.tag_id == tag_id).first()
     if tag is None:
         return {"state": "UNKNOWN", "message": "Tag nije pronađen."}
@@ -1134,6 +1134,18 @@ def public_tag_view(tag_id: str, db: Session = Depends(get_db)):
         if owner:
             contact["phone"] = owner.phone
             contact["city"] = owner.city
+
+    try:
+        scan = TagScan(
+            pet_id=pet.id,
+            is_lost=(pet.status == PetStatus.LOST),
+            ip=request.client.host if request and request.client else None,
+            user_agent=request.headers.get("user-agent") if request else None,
+        )
+        db.add(scan)
+        db.commit()
+    except Exception:
+        db.rollback()
 
         return {
             "state": "LOST",
@@ -1202,3 +1214,80 @@ def public_tag_page(tag_id: str, request: Request, db: Session = Depends(get_db)
             "contact": data.get("contact"),
         },
     )
+
+@app.post("/pets/{pet_id}/breeding_auth")
+def toggle_breeding_auth(
+    pet_id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(
+        Pet.id == pet_id,
+        Pet.owner_email == user.email
+    ).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+
+    pet.is_breeding = not bool(pet.is_breeding)
+    db.add(pet)
+    db.commit()
+    db.refresh(pet)
+
+    return {"pet_id": pet.id, "is_breeding": bool(pet.is_breeding)}
+
+@app.get("/pets/{pet_id}/scan_stats_auth")
+def scan_stats_auth(
+    pet_id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(
+        Pet.id == pet_id,
+        Pet.owner_email == user.email
+    ).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+
+    total_scans = db.query(func.count(TagScan.id)).filter(TagScan.pet_id == pet.id).scalar() or 0
+    lost_scans = db.query(func.count(TagScan.id)).filter(TagScan.pet_id == pet.id, TagScan.is_lost == True).scalar() or 0
+    last_scan_at = db.query(func.max(TagScan.created_at)).filter(TagScan.pet_id == pet.id).scalar()
+    last_lost_scan_at = db.query(func.max(TagScan.created_at)).filter(TagScan.pet_id == pet.id, TagScan.is_lost == True).scalar()
+
+    return {
+        "total_scans": int(total_scans),
+        "lost_scans": int(lost_scans),
+        "last_scan_at": last_scan_at.isoformat() if last_scan_at else None,
+        "last_lost_scan_at": last_lost_scan_at.isoformat() if last_lost_scan_at else None,
+    }
+
+@app.get("/pets/{pet_id}/scan_history_auth")
+def scan_history_auth(
+    pet_id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 20,
+):
+    pet = db.query(Pet).filter(
+        Pet.id == pet_id,
+        Pet.owner_email == user.email
+    ).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+
+    scans = (
+        db.query(TagScan)
+        .filter(TagScan.pet_id == pet.id)
+        .order_by(TagScan.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": s.id,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "is_lost": bool(s.is_lost),
+            "ip": s.ip,
+        }
+        for s in scans
+    ]

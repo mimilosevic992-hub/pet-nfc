@@ -45,6 +45,7 @@ class Pet(Base):
     pedigree = Column(String, nullable=True)
 
     status = Column(Enum(PetStatus), nullable=False, default=PetStatus.ACTIVE)
+    is_breeding = Column(Boolean, nullable=False, default=False)
 
     tag_id = Column(Integer, ForeignKey("tags.id"), unique=True, nullable=False)
     tag = relationship("Tag")
@@ -140,3 +141,20 @@ class Reminder(Base):
     notes = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+class TagScan(Base):
+    __tablename__ = "tag_scans"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    pet_id = Column(Integer, ForeignKey("pets.id"), index=True, nullable=False)
+    pet = relationship("Pet")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # da li je ljubimac bio LOST u trenutku skeniranja
+    is_lost = Column(Boolean, nullable=False, default=False)
+
+    # opciono (korisno za admin kasnije)
+    ip = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
