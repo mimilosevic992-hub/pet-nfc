@@ -3,6 +3,7 @@
 import { Accordion } from "@/app/components/Accordion";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { requireOwnerContact } from "@/app/lib/guards";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
@@ -16,10 +17,6 @@ type PetDetail = {
   status: "ACTIVE" | "LOST" | "DECEASED";
   tag_id: string | null;
   tag_status: string | null;
-
-  // Ako već imaš u backendu:
-  // breeding?: boolean;
-  // pairing_enabled?: boolean;
 };
 
 function initials(name: string) {
@@ -47,7 +44,6 @@ export default function PetProfilePage() {
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Vidljivost modal (confirm samo kad palimo LOST)
   const [confirmLostOpen, setConfirmLostOpen] = useState(false);
 
   // Breeding state (dok ne uvežemo backend, držimo lokalno)
@@ -76,9 +72,6 @@ export default function PetProfilePage() {
 
       const data = JSON.parse(text) as PetDetail;
       setPet(data);
-
-      // Ako u budućnosti backend vraća breeding flag, ovde ga mapiraš:
-      // setBreedingOn(Boolean((data as any).breeding));
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
     } finally {
@@ -114,53 +107,17 @@ export default function PetProfilePage() {
     }
   }
 
-  // ⚠️ TODO: uveži sa backendom kad pošalješ endpoint
   async function toggleBreeding(next: boolean) {
     setErr(null);
     setMsg(null);
 
     try {
-      // ovde će doći backend poziv (kad mi pošalješ rutu)
+      // TODO: uveži sa backendom kada bude spremno
       setBreedingOn(next);
       setMsg(next ? "Status parenja uključen" : "Status parenja isključen");
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
     }
-  }
-
-  type Me = { email: string; phone: string | null; city: string | null };
-
-  async function ensureOwnerContact(router: any, setErr: (v: string | null) => void) {
-    const token = localStorage.getItem("petnfc_token");
-    if (!token) {
-      router.replace("/login");
-      return false;
-    }
-
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-
-    const raw = await res.text();
-    if (!res.ok) {
-      let detail = raw;
-      try { detail = JSON.parse(raw)?.detail ?? raw; } catch {}
-      setErr(detail || "Ne mogu da učitam owner profil.");
-      return false;
-    }
-
-    const me = JSON.parse(raw) as Me;
-    const okPhone = (me.phone ?? "").trim().length >= 6;
-    const okCity = (me.city ?? "").trim().length >= 2;
-
-    if (!okPhone || !okCity) {
-      setErr("Da bi uključio LOST, prvo popuni Moj profil (telefon i grad).");
-      router.push("/me");
-      return false;
-    }
-
-    return true;
   }
 
   useEffect(() => {
@@ -288,7 +245,9 @@ export default function PetProfilePage() {
                 href={`/pets/${pet.pet_id}/health`}
                 className="rounded-2xl border border-gray-300 bg-white p-5 hover:bg-gray-50"
               >
-                <div className="text-sm font-bold text-gray-900">💉 Zdravstveni karton</div>
+                <div className="text-sm font-bold text-gray-900">
+                  💉 Zdravstveni karton
+                </div>
                 <div className="mt-1 text-sm text-gray-700">
                   Vakcine, pregledi, terapije, alergije, beleške + PDF.
                 </div>
@@ -390,11 +349,11 @@ export default function PetProfilePage() {
                       type="button"
                       onClick={async () => {
                         if (!lostOn) {
-                          const ok = await ensureOwnerContact(router, setErr);
-                          if (!ok) return;              // ❗ strict: ne nastavljamo
-                          setConfirmLostOpen(true);     // owner podaci ok → tek sad confirm
+                          const ok = await requireOwnerContact(router, setErr);
+                          if (!ok) return;          // ❗ strict
+                          setConfirmLostOpen(true); // owner podaci ok → confirm
                         } else {
-                          setLost(false);               // gašenje bez provere
+                          setLost(false);           // gašenje bez provere
                         }
                       }}
                       className={`rounded-full px-4 py-2 text-sm font-bold ${
@@ -432,7 +391,7 @@ export default function PetProfilePage() {
                   </div>
                 </div>
 
-                {/* Confirm modal (samo za paljenje LOST) */}
+                {/* Confirm modal */}
                 {confirmLostOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
                     <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow">
@@ -454,7 +413,7 @@ export default function PetProfilePage() {
                         <button
                           className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                           onClick={async () => {
-                            const ok = await ensureOwnerContact(router, setErr);
+                            const ok = await requireOwnerContact(router, setErr);
                             if (!ok) {
                               setConfirmLostOpen(false);
                               return;
@@ -484,7 +443,9 @@ export default function PetProfilePage() {
 
                   <button
                     type="button"
-                    onClick={() => alert("LOST poster: ubacićemo download action iz postojećeg koda 🙂")}
+                    onClick={() =>
+                      alert("LOST poster: ubacićemo download action iz postojećeg koda 🙂")
+                    }
                     className="w-full rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
                   >
                     🖼️ Preuzmi LOST poster
