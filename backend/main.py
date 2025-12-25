@@ -573,6 +573,14 @@ def activate_tag_auth(
         raise HTTPException(status_code=404, detail="Tag ne postoji (nije u inventaru).")
 
     if tag.status != TagStatus.FREE:
+        # ✅ Ako je već ACTIVE i pripada ovom useru, dozvoli “nastavak”
+        if tag.status == TagStatus.ACTIVE and tag.owner_email == current_user.email:
+            return {"ok": True, "tag_id": tag.tag_id, "status": tag.status, "resumed": True}
+
+        # Ako je ACTIVE ali nije tvoj tag → zabrani
+        if tag.status == TagStatus.ACTIVE and tag.owner_email != current_user.email:
+            raise HTTPException(status_code=403, detail="Tag je već aktiviran od strane drugog naloga.")
+
         raise HTTPException(status_code=400, detail=f"Tag nije FREE (trenutno: {tag.status}).")
 
     tag.status = TagStatus.ACTIVE
