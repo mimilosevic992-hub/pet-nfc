@@ -63,9 +63,20 @@ export default function NewPetPage() {
         body: JSON.stringify({ tag_id: tagId.trim() }),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
 
-      const data = await res.json();
+      // ✅ Ako nije ok, proveri da li je to samo "nije FREE" (ACTIVE)
+      if (!res.ok) {
+        // backend poruka izgleda: "Tag nije FREE (trenutno: ACTIVE)."
+        if (text.includes("trenutno: ACTIVE")) {
+          setTagMsg(`Tag je već aktiviran (${tagId.trim()}). Nastavi dodavanje ljubimca.`);
+          setStep("FORM");
+          return;
+        }
+        throw new Error(text);
+      }
+
+      const data = JSON.parse(text);
       setTagMsg(`Tag aktiviran: ${data.tag_id} (${data.status})`);
       setStep("FORM");
     } catch (e: any) {
