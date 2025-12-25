@@ -17,8 +17,11 @@ export default function NewPetPage() {
 
   const [name, setName] = useState("");
   const [species, setSpecies] = useState("");
+  const [sex, setSex] = useState<"MALE" | "FEMALE" | "">("");
+  const [breed, setBreed] = useState("");
   const [birthYear, setBirthYear] = useState<number | "">("");
   const [pedigree, setPedigree] = useState(false);
+
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -35,11 +38,12 @@ export default function NewPetPage() {
       tagId.trim().length >= 3 &&
       name.trim().length >= 1 &&
       species.trim().length >= 1 &&
+      sex !== "" &&
       typeof birthYear === "number" &&
       birthYear >= 1900 &&
-      birthYear <= 2100
+      birthYear <= 2100     
     );
-  }, [tagId, name, species, birthYear]);
+  }, [tagId, name, species, birthYear, sex]);
 
   async function activateTag() {
     setLoading(true);
@@ -91,6 +95,8 @@ export default function NewPetPage() {
           species: species.trim(),
           birth_year: birthYear,
           pedigree,
+          sex,
+          breed: breed.trim() || null,
         }),
       });
 
@@ -207,6 +213,43 @@ export default function NewPetPage() {
                 >
                   🐱 Mačka
                 </button>
+                <div>
+                  <label className="text-sm font-medium">Pol</label>
+
+                  <div className="mt-2 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSex("MALE")}
+                      className={`flex-1 rounded-xl border px-4 py-2 font-semibold ${
+                        sex === "MALE" ? "bg-black text-white" : "bg-white hover:bg-gray-100"
+                      }`}
+                    >
+                      ♂ Mužjak
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSex("FEMALE")}
+                      className={`flex-1 rounded-xl border px-4 py-2 font-semibold ${
+                        sex === "FEMALE" ? "bg-black text-white" : "bg-white hover:bg-gray-100"
+                      }`}
+                    >
+                      ♀ Ženka
+                    </button>
+                  </div>
+
+                  <p className="mt-1 text-xs text-gray-500">Obavezno. Zaključava se nakon čuvanja.</p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Rasa (opciono)</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                    value={breed}
+                    onChange={(e) => setBreed(e.target.value)}
+                    placeholder="npr. Labrador, Mešanac…"
+                  />
+                </div>
               </div>
             </div>
 

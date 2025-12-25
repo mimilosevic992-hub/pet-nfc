@@ -14,6 +14,10 @@ type PetDetail = {
   status: "ACTIVE" | "LOST" | "DECEASED";
   tag_id: string | null;
   tag_status: string | null;
+  sex?: "MALE" | "FEMALE" | "UNKNOWN";
+  breed?: string | null;
+  is_neutered?: "YES" | "NO" | "UNKNOWN";
+  notes?: string | null;
 };
 
 export default function PetEditPage() {
@@ -30,6 +34,9 @@ export default function PetEditPage() {
 
   const [pet, setPet] = useState<PetDetail | null>(null);
   const [pedigree, setPedigree] = useState(false);
+  const [breed, setBreed] = useState("");
+  const [isNeutered, setIsNeutered] = useState<"YES" | "NO" | "UNKNOWN">("UNKNOWN");
+  const [notes, setNotes] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,6 +67,9 @@ export default function PetEditPage() {
 
       const data = JSON.parse(text) as PetDetail;
       setPet(data);
+      setBreed(data.breed ?? "");
+      setIsNeutered((data.is_neutered as any) ?? "UNKNOWN");
+      setNotes(data.notes ?? "");
       setPedigree(!!data.pedigree);
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
@@ -84,7 +94,12 @@ export default function PetEditPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ pedigree }),
+        body: JSON.stringify({
+          pedigree,
+          breed: breed.trim() || null,
+          is_neutered: isNeutered,
+          notes: notes.trim() || null,
+        }),
       });
 
       const text = await res.text();
@@ -179,6 +194,10 @@ export default function PetEditPage() {
                   <div className="text-gray-500">Tag ID</div>
                   <div className="font-mono font-semibold">{pet.tag_id ?? "-"}</div>
                 </div>
+                <div>
+                  <div className="text-gray-500">Pol</div>
+                  <div className="font-semibold">{pet.sex ?? "UNKNOWN"}</div>
+                </div>
               </div>
             </div>
 
@@ -194,6 +213,41 @@ export default function PetEditPage() {
                 />
                 Pedigree (prikaži oznaku)
               </label>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Rasa (opciono)</label>
+                  <input
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                    value={breed}
+                    onChange={(e) => setBreed(e.target.value)}
+                    placeholder="npr. Labrador, Mešanac…"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Sterilisan / kastriran</label>
+                  <select
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                    value={isNeutered}
+                    onChange={(e) => setIsNeutered(e.target.value as any)}
+                  >
+                    <option value="UNKNOWN">Nepoznato</option>
+                    <option value="YES">Da</option>
+                    <option value="NO">Ne</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Napomena (opciono)</label>
+                  <textarea
+                    className="mt-1 w-full rounded-xl border px-3 py-2"
+                    rows={4}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="npr. plašljiv, ne voli druge pse, alergija na…"
+                  />
+                </div>
+              </div>
 
               <button
                 onClick={save}
