@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { requireOwnerContact } from "@/app/lib/guards";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE || "https://pet-nfc.onrender.com";
 
 type PetRow = {
   pet_id: number;
@@ -13,7 +15,6 @@ type PetRow = {
   tag_id: string | null;
   tag_status: string | null;
 
-  // opciono za kasnije (ako dodaš u backend)
   avatar_url?: string | null;
   breeding?: boolean | null;
 };
@@ -23,7 +24,7 @@ type DashReminder = {
   pet_id: number;
   pet_name: string;
   type: "VACCINE" | "CHECKUP" | "THERAPY" | string;
-  date: string;   // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   title: string;
   notes?: string | null;
   status: "upcoming" | "today" | "overdue" | string;
@@ -34,6 +35,24 @@ function initials(name: string) {
   if (!n) return "🐾";
   const parts = n.split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase()).join("");
+}
+
+function toDate(d: string) {
+  const [y, m, dd] = d.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, dd || 1);
+}
+
+function inNext7Days(d: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const end = new Date(today);
+  end.setDate(end.getDate() + 7);
+
+  const rd = toDate(d);
+  rd.setHours(0, 0, 0, 0);
+
+  return rd >= today && rd <= end;
 }
 
 export default function DashboardPage() {
@@ -49,25 +68,6 @@ export default function DashboardPage() {
     localStorage.removeItem("petnfc_token");
     router.push("/login");
   }
-
-  function toDate(d: string) {
-  const [y, m, dd] = d.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, dd || 1);
-}
-
-function inNext7Days(d: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const end = new Date(today);
-  end.setDate(end.getDate() + 7);
-
-  const rd = toDate(d);
-  rd.setHours(0, 0, 0, 0);
-
-  // uključuje TODAY i narednih 7 dana
-  return rd >= today && rd <= end;
-}
 
   async function loadPets() {
     setLoading(true);
@@ -91,6 +91,8 @@ function inNext7Days(d: string) {
 
       const data = JSON.parse(text) as PetRow[];
       setPets(data);
+
+      // reminders ne sme da blokira dashboard
       loadUpcomingReminders(data);
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
@@ -112,6 +114,7 @@ function inNext7Days(d: string) {
             headers: { Authorization: `Bearer ${token}` },
             cache: "no-store",
           });
+
           const text = await res.text();
           if (!res.ok) return [];
 
@@ -140,7 +143,6 @@ function inNext7Days(d: string) {
 
       setUpcoming(filtered);
     } catch {
-      // dashboard ne treba da "pukne" ako reminders failuje
       setUpcoming([]);
     }
   }
@@ -150,6 +152,12 @@ function inNext7Days(d: string) {
     setErr(null);
 
     try {
+      // ✅ STRICT: pre nego uključi LOST, proveri owner phone+city
+      if (nextLost) {
+        const ok = await requireOwnerContact(router, setErr);
+        if (!ok) return;
+      }
+
       const token = localStorage.getItem("petnfc_token");
       if (!token) throw new Error("Nisi ulogovan.");
 
@@ -165,7 +173,6 @@ function inNext7Days(d: string) {
       const text = await res.text();
       if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
-      // lokalno osveži (brže nego full reload)
       setPets((prev) =>
         prev.map((p) =>
           p.pet_id === petId ? { ...p, status: nextLost ? "LOST" : "ACTIVE" } : p
@@ -203,8 +210,8 @@ function inNext7Days(d: string) {
         <div className="rounded-2xl bg-white p-6 shadow">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold">{title}</h1>
-              <p className="mt-1 text-sm text-gray-600">
+              <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+              <p className="mt-1 text-sm text-gray-700">
                 Tvoji ljubimci i brze akcije (LOST / profil).
               </p>
             </div>
@@ -212,7 +219,7 @@ function inNext7Days(d: string) {
             <div className="flex flex-wrap gap-2">
               <a
                 href="/pets/new"
-                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
               >
                 + Dodaj ljubimca
               </a>
@@ -220,14 +227,21 @@ function inNext7Days(d: string) {
               <button
                 onClick={loadPets}
                 disabled={loading}
-                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-40"
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 disabled:opacity-40"
               >
                 {loading ? "Učitavam..." : "Osveži"}
               </button>
 
+              <a
+                href="/me"
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+              >
+                Moj profil
+              </a>
+
               <button
                 onClick={logout}
-                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-100"
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
               >
                 Logout
               </button>
@@ -246,12 +260,14 @@ function inNext7Days(d: string) {
           )}
         </div>
 
-        {/* Body */}
+        {/* Upcoming reminders */}
         {upcoming.length > 0 && (
           <div className="rounded-2xl bg-white p-6 shadow">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">Podsetnici (narednih 7 dana)</h2>
-              <div className="text-sm text-gray-600">{upcoming.length} ukupno</div>
+              <h2 className="text-lg font-bold text-gray-900">
+                Podsetnici (narednih 7 dana)
+              </h2>
+              <div className="text-sm text-gray-700">{upcoming.length} ukupno</div>
             </div>
 
             <div className="mt-3 space-y-2">
@@ -259,16 +275,16 @@ function inNext7Days(d: string) {
                 <a
                   key={r.id}
                   href={`/pets/${r.pet_id}/reminders`}
-                  className="block rounded-xl border p-3 hover:bg-gray-50"
+                  className="block rounded-xl border border-gray-300 p-3 hover:bg-gray-50"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-semibold">
+                    <div className="font-semibold text-gray-900">
                       {r.pet_name}: {r.title}
                     </div>
-                    <div className="text-sm text-gray-600">{r.date}</div>
+                    <div className="text-sm text-gray-700">{r.date}</div>
                   </div>
 
-                  <div className="mt-1 text-sm text-gray-600">
+                  <div className="mt-1 text-sm text-gray-700">
                     {r.type} • {r.status}
                   </div>
                 </a>
@@ -276,25 +292,27 @@ function inNext7Days(d: string) {
             </div>
           </div>
         )}
+
+        {/* Pets */}
         <div className="rounded-2xl bg-white p-6 shadow">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">Moji ljubimci</h2>
-            <div className="text-sm text-gray-600">
+            <h2 className="text-lg font-bold text-gray-900">Moji ljubimci</h2>
+            <div className="text-sm text-gray-700">
               Ukupno: <b>{pets.length}</b>
             </div>
           </div>
 
           {loading ? (
-            <p className="mt-4 text-sm text-gray-600">Učitavam…</p>
+            <p className="mt-4 text-sm text-gray-700">Učitavam…</p>
           ) : !hasPets ? (
             <div className="mt-4 rounded-2xl border bg-gray-50 p-6">
-              <div className="font-semibold">Nemaš još ljubimaca.</div>
+              <div className="font-semibold text-gray-900">Nemaš još ljubimaca.</div>
               <p className="mt-2 text-sm text-gray-700">
                 Klikni na <b>Dodaj ljubimca</b> i aktiviraj tag da kreiraš profil.
               </p>
               <a
                 href="/pets/new"
-                className="mt-4 inline-flex rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
+                className="mt-4 inline-flex rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
               >
                 + Dodaj ljubimca
               </a>
@@ -308,12 +326,11 @@ function inNext7Days(d: string) {
                 return (
                   <div
                     key={p.pet_id}
-                    className="rounded-2xl border bg-white p-4 shadow-sm flex flex-col gap-3"
+                    className="rounded-2xl border border-gray-300 bg-white p-4 shadow-sm flex flex-col gap-3"
                   >
                     {/* Top */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        {/* Avatar */}
                         <div className="h-12 w-12 rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden">
                           {avatar ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -330,29 +347,27 @@ function inNext7Days(d: string) {
                         </div>
 
                         <div>
-                          <div className="font-semibold">
+                          <div className="font-semibold text-gray-900">
                             {p.name}{" "}
-                            <span className="text-gray-500">({p.species})</span>
+                            <span className="text-gray-600">({p.species})</span>
                           </div>
-                          <div className="text-xs text-gray-600 mt-0.5">
+                          <div className="text-xs text-gray-700 mt-0.5">
                             Tag: <span className="font-mono">{p.tag_id ?? "-"}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Badges */}
                       <div className="flex flex-col items-end gap-2">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-bold ${
                             isLost
                               ? "bg-red-100 text-red-800"
-                              : "bg-green-100 text-green-800"
+                              : "bg-emerald-100 text-emerald-800"
                           }`}
                         >
                           {isLost ? "LOST" : "SAFE"}
                         </span>
 
-                        {/* placeholder za breeding (kad ubacimo) */}
                         {p.breeding ? (
                           <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
                             BREEDING
@@ -361,13 +376,14 @@ function inNext7Days(d: string) {
                       </div>
                     </div>
 
-                    {/* Public link */}
                     {p.tag_id ? (
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-700">
                         Public profil:{" "}
                         <a
                           className="underline"
-                          href={`https://pet-nfc.vercel.app/t/${encodeURIComponent(p.tag_id)}`}
+                          href={`https://pet-nfc.vercel.app/t/${encodeURIComponent(
+                            p.tag_id
+                          )}`}
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -376,17 +392,16 @@ function inNext7Days(d: string) {
                       </div>
                     ) : null}
 
-                    {/* Actions */}
                     <div className="mt-auto grid grid-cols-2 gap-2">
                       <a
                         href={`/pets/${p.pet_id}`}
-                        className="rounded-xl border px-3 py-2 text-center text-sm font-semibold hover:bg-gray-100"
+                        className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-center text-sm font-semibold text-gray-900 hover:bg-gray-100"
                       >
                         Profil
                       </a>
                       <a
                         href={`/pets/${p.pet_id}/edit`}
-                        className="rounded-xl border px-3 py-2 text-center text-sm font-semibold hover:bg-gray-100"
+                        className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-center text-sm font-semibold text-gray-900 hover:bg-gray-100"
                       >
                         Izmeni profil
                       </a>
