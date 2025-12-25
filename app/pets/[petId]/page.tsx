@@ -128,6 +128,41 @@ export default function PetProfilePage() {
     }
   }
 
+  type Me = { email: string; phone: string | null; city: string | null };
+
+  async function ensureOwnerContact(router: any, setErr: (v: string | null) => void) {
+    const token = localStorage.getItem("petnfc_token");
+    if (!token) {
+      router.replace("/login");
+      return false;
+    }
+
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+
+    const raw = await res.text();
+    if (!res.ok) {
+      let detail = raw;
+      try { detail = JSON.parse(raw)?.detail ?? raw; } catch {}
+      setErr(detail || "Ne mogu da učitam owner profil.");
+      return false;
+    }
+
+    const me = JSON.parse(raw) as Me;
+    const okPhone = (me.phone ?? "").trim().length >= 6;
+    const okCity = (me.city ?? "").trim().length >= 2;
+
+    if (!okPhone || !okCity) {
+      setErr("Da bi uključio LOST, prvo popuni Moj profil (telefon i grad).");
+      router.push("/me");
+      return false;
+    }
+
+    return true;
+  }
+
   useEffect(() => {
     const token = localStorage.getItem("petnfc_token");
     if (!token) {
@@ -353,9 +388,14 @@ export default function PetProfilePage() {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!lostOn) setConfirmLostOpen(true);
-                        else setLost(false);
+                      onClick={async () => {
+                        if (!lostOn) {
+                          const ok = await ensureOwnerContact(router, setErr);
+                          if (!ok) return;              // ❗ strict: ne nastavljamo
+                          setConfirmLostOpen(true);     // owner podaci ok → tek sad confirm
+                        } else {
+                          setLost(false);               // gašenje bez provere
+                        }
                       }}
                       className={`rounded-full px-4 py-2 text-sm font-bold ${
                         lostOn ? "bg-red-600 text-white" : "bg-gray-200 text-gray-900"
@@ -413,7 +453,12 @@ export default function PetProfilePage() {
 
                         <button
                           className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-                          onClick={() => {
+                          onClick={async () => {
+                            const ok = await ensureOwnerContact(router, setErr);
+                            if (!ok) {
+                              setConfirmLostOpen(false);
+                              return;
+                            }
                             setConfirmLostOpen(false);
                             setLost(true);
                           }}
