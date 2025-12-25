@@ -46,6 +46,10 @@ class Pet(Base):
 
     status = Column(Enum(PetStatus), nullable=False, default=PetStatus.ACTIVE)
     is_breeding = Column(Boolean, nullable=False, default=False)
+    sex = Column(String, nullable=False, default="UNKNOWN")      # MALE/FEMALE/UNKNOWN
+    breed = Column(String, nullable=True)                        # rasa (opciono)
+    is_neutered = Column(String, nullable=False, default="UNKNOWN")  # YES/NO/UNKNOWN
+    notes = Column(String, nullable=True)  
 
     tag_id = Column(Integer, ForeignKey("tags.id"), unique=True, nullable=False)
     tag = relationship("Tag")

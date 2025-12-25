@@ -72,6 +72,14 @@ def _auto_migrate():
             # These will fail if table doesn't exist yet, but create_all happens first.
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tag_scans_pet_id ON tag_scans(pet_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tag_scans_created_at ON tag_scans(created_at)"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS sex VARCHAR"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS breed VARCHAR"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS is_neutered VARCHAR"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS notes VARCHAR"))
+
+            # defaults za stare redove (da ne ostane NULL)
+            conn.execute(text("UPDATE pets SET sex = 'UNKNOWN' WHERE sex IS NULL"))
+            conn.execute(text("UPDATE pets SET is_neutered = 'UNKNOWN' WHERE is_neutered IS NULL"))
 
     except Exception as e:
         print("Auto-migrate warning:", repr(e))
@@ -119,6 +127,8 @@ class CreatePetAuthRequest(BaseModel):
     species: str
     birth_year: int = Field(..., ge=1900, le=2100)
     pedigree: bool = False
+    sex: str
+    breed: str | None = None
 
 
 class OwnerProfileAuthRequest(BaseModel):
@@ -145,6 +155,9 @@ class AdminMarkPrintedRequest(BaseModel):
 
 class PetEditRequest(BaseModel):
     pedigree: bool
+    breed: str | None = None
+    is_neutered: str = "UNKNOWN"
+    notes: str | None = None
 
 class HealthEntryCreateRequest(BaseModel):
     section: str  # VACCINATION | CHECKUP | THERAPY | ALLERGY | NOTE
@@ -604,6 +617,10 @@ def create_pet_and_assign_auth(
         status=PetStatus.ACTIVE,
         tag_id=tag.id,
         owner_email=current_user.email,
+        sex=(payload.sex or "").strip().upper(),
+        breed=(payload.breed.strip() if payload.breed else None),
+        is_neutered="UNKNOWN",
+        notes=None,
         # ako imaš identity_locked u modelu, stavi:
         # identity_locked=True,
     )
@@ -656,6 +673,9 @@ def edit_pet_auth(
 
     # dozvoljavamo samo pedigree za sada
     pet.pedigree = payload.pedigree
+    pet.breed = payload.breed.strip() if payload.breed else None
+    pet.is_neutered = (payload.is_neutered or "UNKNOWN").strip().upper()
+    pet.notes = payload.notes.strip() if payload.notes else None
     db.add(pet)
     db.commit()
     db.refresh(pet)
@@ -695,6 +715,10 @@ def get_pet_detail_auth(
         "status": pet.status,
         "tag_id": tag.tag_id if tag else None,
         "tag_status": tag.status if tag else None,
+        "sex": getattr(pet, "sex", "UNKNOWN"),
+        "breed": getattr(pet, "breed", None),
+        "is_neutered": getattr(pet, "is_neutered", "UNKNOWN"),
+        "notes": getattr(pet, "notes", None),
     }
 
 
