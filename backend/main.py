@@ -601,12 +601,16 @@ def create_pet_and_assign_auth(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # 1) Tag validacije
     tag = db.query(Tag).filter(Tag.tag_id == payload.tag_id).first()
     if tag is None:
         raise HTTPException(status_code=404, detail="Tag ne postoji.")
 
     if tag.status != TagStatus.ACTIVE:
-        raise HTTPException(status_code=400, detail=f"Tag mora biti ACTIVE (trenutno: {tag.status}).")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tag mora biti ACTIVE (trenutno: {tag.status}).",
+        )
 
     if tag.owner_email != current_user.email:
         raise HTTPException(status_code=403, detail="Ovaj tag ne pripada ulogovanom korisniku.")
@@ -615,24 +619,46 @@ def create_pet_and_assign_auth(
     if existing_pet:
         raise HTTPException(status_code=400, detail="Ovaj tag je već dodeljen ljubimcu.")
 
-    birth_date = date(payload.birth_year, 1, 1)
+    # 2) Payload validacije + normalizacija
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Ime je obavezno.")
 
+    species = (payload.species or "").strip().upper()
+    if species not in ("DOG", "CAT"):
+        raise HTTPException(status_code=400, detail="Vrsta mora biti DOG ili CAT.")
+
+    sex = (payload.sex or "").strip().upper()
+    if sex not in ("MALE", "FEMALE"):
+        raise HTTPException(status_code=400, detail="Pol mora biti MALE ili FEMALE.")
+
+    if not isinstance(payload.birth_year, int) or payload.birth_year < 1900 or payload.birth_year > 2100:
+        raise HTTPException(status_code=400, detail="Godina rođenja nije validna.")
+
+    # 3) birth_date kao string (model ti je String)
+    birth_date = date(payload.birth_year, 1, 1).isoformat()  # "YYYY-01-01"
+
+    # 4) pedigree je String u bazi -> čuvamo konzistentno
+    pedigree_db = "TRUE" if bool(payload.pedigree) else "FALSE"
+
+    breed = payload.breed.strip() if payload.breed else None
+
+    # 5) Kreiraj Pet
     pet = Pet(
-        name=payload.name,
-        species=payload.species,
+        name=name,
+        species=species,
         birth_date=birth_date,
-        pedigree=payload.pedigree,
+        pedigree=pedigree_db,
         status=PetStatus.ACTIVE,
         tag_id=tag.id,
         owner_email=current_user.email,
-        sex=(payload.sex or "").strip().upper(),
-        breed=(payload.breed.strip() if payload.breed else None),
+        sex=sex,
+        breed=breed,
         is_neutered="UNKNOWN",
         notes=None,
-        # ako imaš identity_locked u modelu, stavi:
-        # identity_locked=True,
     )
 
+    # 6) Tag postaje ASSIGNED
     tag.status = TagStatus.ASSIGNED
 
     db.add(pet)
@@ -640,7 +666,12 @@ def create_pet_and_assign_auth(
     db.commit()
     db.refresh(pet)
 
-    return {"ok": True, "pet_id": pet.id, "tag_id": tag.tag_id, "tag_status": tag.status}
+    return {
+        "ok": True,
+        "pet_id": pet.id,
+        "tag_id": tag.tag_id,
+        "tag_status": tag.status,
+    }
 
 
 
