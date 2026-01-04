@@ -262,10 +262,11 @@ export default function BreedingPage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((p) => (
-                  <div
+                  <a
                     key={p.pet_id}
-                    className="rounded-2xl border border-gray-300 bg-white p-5"
-                  >
+                    href={`/breeding/${p.pet_id}`}
+                    className="block rounded-2xl border border-gray-300 bg-white p-5 hover:bg-gray-50"
+                    >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-bold text-gray-900">{p.name}</div>
@@ -299,7 +300,7 @@ export default function BreedingPage() {
                         </a>
                       </div>
                     ) : null}
-                  </div>
+                  </a>
                 ))}
               </div>
             )}
