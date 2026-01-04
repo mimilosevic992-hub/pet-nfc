@@ -55,6 +55,13 @@ function inNext7Days(d: string) {
   return rd >= today && rd <= end;
 }
 
+function maskTag(tagId: string | null) {
+  if (!tagId) return "-";
+  // npr: ABCD-...-WXYZ
+  if (tagId.length <= 8) return "••••";
+  return `${tagId.slice(0, 4)}••••${tagId.slice(-4)}`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -110,10 +117,13 @@ export default function DashboardPage() {
 
       const all = await Promise.all(
         alive.map(async (p) => {
-          const res = await fetch(`${API_BASE}/pets/${p.pet_id}/reminders_auth`, {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: "no-store",
-          });
+          const res = await fetch(
+            `${API_BASE}/pets/${p.pet_id}/reminders_auth`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            }
+          );
 
           const text = await res.text();
           if (!res.ok) return [];
@@ -152,7 +162,7 @@ export default function DashboardPage() {
     setErr(null);
 
     try {
-      // ✅ STRICT: pre nego uključi LOST, proveri owner phone+city
+      // STRICT: pre nego uključi LOST, proveri owner phone+city
       if (nextLost) {
         const ok = await requireOwnerContact(router, setErr);
         if (!ok) return;
@@ -214,6 +224,37 @@ export default function DashboardPage() {
               <p className="mt-1 text-sm text-gray-700">
                 Tvoji ljubimci i brze akcije (LOST / profil).
               </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="/pets/new"
+                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                + Dodaj ljubimca
+              </a>
+
+              <button
+                onClick={loadPets}
+                disabled={loading}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 disabled:opacity-40"
+              >
+                {loading ? "Učitavam..." : "Osveži"}
+              </button>
+
+              <a
+                href="/me"
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+              >
+                Moj profil
+              </a>
+
+              <button
+                onClick={logout}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+              >
+                Logout
+              </button>
             </div>
           </div>
 
@@ -320,8 +361,11 @@ export default function DashboardPage() {
                             {p.name}{" "}
                             <span className="text-gray-600">({p.species})</span>
                           </div>
+
+                          {/* TAG maskiran (da ne širiš tag id okolo) */}
                           <div className="text-xs text-gray-700 mt-0.5">
-                            Tag: <span className="font-mono">{p.tag_id ?? "-"}</span>
+                            Tag:{" "}
+                            <span className="font-mono">{maskTag(p.tag_id)}</span>
                           </div>
                         </div>
                       </div>
@@ -345,22 +389,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {p.tag_id ? (
-                      <div className="text-sm text-gray-700">
-                        Public profil:{" "}
-                        <a
-                          className="underline"
-                          href={`https://pet-nfc.vercel.app/t/${encodeURIComponent(
-                            p.tag_id
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          /t/{p.tag_id}
-                        </a>
-                      </div>
-                    ) : null}
-
+                    {/* Actions */}
                     <div className="mt-auto grid grid-cols-2 gap-2">
                       <a
                         href={`/pets/${p.pet_id}`}
@@ -372,7 +401,7 @@ export default function DashboardPage() {
                         href={`/pets/${p.pet_id}/edit`}
                         className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-center text-sm font-semibold text-gray-900 hover:bg-gray-100"
                       >
-                        Izmeni profil
+                        Izmeni
                       </a>
                     </div>
 
