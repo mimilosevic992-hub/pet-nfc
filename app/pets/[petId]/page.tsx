@@ -15,19 +15,31 @@ type PetDetail = {
   birth_date: string | null;
   pedigree: boolean;
   status: "ACTIVE" | "LOST" | "DECEASED";
+
   tag_id: string | null;
   tag_status: string | null;
+
+  // novooo (da bi slika radila svuda)
+  avatar_url?: string | null;
+
+  // breeding + dodatno (ako backend već vraća)
   is_breeding?: boolean;
   sex?: "MALE" | "FEMALE";
   breed?: string | null;
 };
 
 function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
   const first = parts[0]?.[0] ?? "";
   const second = parts[1]?.[0] ?? "";
   const s = (first + second).toUpperCase();
   return s || "🐾";
+}
+
+function maskTag(tagId: string | null) {
+  if (!tagId) return "-";
+  if (tagId.length <= 8) return "••••";
+  return `${tagId.slice(0, 4)}••••${tagId.slice(-4)}`;
 }
 
 export default function PetProfilePage() {
@@ -47,9 +59,10 @@ export default function PetProfilePage() {
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // confirm modal samo kad palimo LOST
   const [confirmLostOpen, setConfirmLostOpen] = useState(false);
 
-  // Breeding state (dok ne uvežemo backend, držimo lokalno)
+  // breeding iz backenda
   const [breedingOn, setBreedingOn] = useState(false);
 
   async function loadPet() {
@@ -129,7 +142,6 @@ export default function PetProfilePage() {
       if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
       const data = JSON.parse(text) as { pet_id: number; is_breeding: boolean };
-
       setBreedingOn(Boolean(data.is_breeding));
       setMsg(data.is_breeding ? "Status parenja uključen" : "Status parenja isključen");
     } catch (e: any) {
@@ -147,11 +159,12 @@ export default function PetProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [petId]);
 
+  const lostOn = pet?.status === "LOST";
+
+  // samo dugme — ne prikazujemo /t/<tag> tekstualno
   const publicUrl = pet?.tag_id
     ? `https://pet-nfc.vercel.app/t/${encodeURIComponent(pet.tag_id)}`
     : null;
-
-  const lostOn = pet?.status === "LOST";
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -205,8 +218,20 @@ export default function PetProfilePage() {
           <div className="rounded-2xl bg-white p-6 shadow space-y-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-lg font-extrabold text-gray-900">
-                  {initials(pet.name)}
+                {/* AVATAR */}
+                <div className="h-16 w-16 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center">
+                  {pet.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={pet.avatar_url}
+                      alt={pet.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-lg font-extrabold text-gray-900">
+                      {initials(pet.name)}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -235,13 +260,13 @@ export default function PetProfilePage() {
                     )}
 
                     <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-800">
-                      TAG: {pet.tag_id ?? "-"}
+                      TAG: {maskTag(pet.tag_id)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Quick link (public) */}
+              {/* Public button (bez ispisa linka/tag-a) */}
               {publicUrl ? (
                 <a
                   href={publicUrl}
@@ -262,9 +287,7 @@ export default function PetProfilePage() {
                 href={`/pets/${pet.pet_id}/health`}
                 className="rounded-2xl border border-gray-300 bg-white p-5 hover:bg-gray-50"
               >
-                <div className="text-sm font-bold text-gray-900">
-                  💉 Zdravstveni karton
-                </div>
+                <div className="text-sm font-bold text-gray-900">💉 Zdravstveni karton</div>
                 <div className="mt-1 text-sm text-gray-700">
                   Vakcine, pregledi, terapije, alergije, beleške + PDF.
                 </div>
@@ -327,6 +350,20 @@ export default function PetProfilePage() {
                     </div>
                   </div>
 
+                  <div className="rounded-xl border border-gray-300 p-4">
+                    <div className="text-gray-700">Pol</div>
+                    <div className="mt-1 font-semibold text-gray-900">
+                      {pet.sex ?? "-"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-300 p-4">
+                    <div className="text-gray-700">Rasa</div>
+                    <div className="mt-1 font-semibold text-gray-900">
+                      {pet.breed ?? "-"}
+                    </div>
+                  </div>
+
                   <div className="rounded-xl border border-gray-300 p-4 sm:col-span-2">
                     <div className="text-gray-700">Tag status</div>
                     <div className="mt-1 font-semibold text-gray-900">
@@ -367,10 +404,10 @@ export default function PetProfilePage() {
                       onClick={async () => {
                         if (!lostOn) {
                           const ok = await requireOwnerContact(router, setErr);
-                          if (!ok) return;          // ❗ strict
-                          setConfirmLostOpen(true); // owner podaci ok → confirm
+                          if (!ok) return;
+                          setConfirmLostOpen(true);
                         } else {
-                          setLost(false);           // gašenje bez provere
+                          setLost(false);
                         }
                       }}
                       className={`rounded-full px-4 py-2 text-sm font-bold ${
@@ -393,7 +430,7 @@ export default function PetProfilePage() {
 
                     <button
                       type="button"
-                      onClick={() => toggleBreeding()}
+                      onClick={toggleBreeding}
                       className={`rounded-full px-4 py-2 text-sm font-bold ${
                         breedingOn ? "bg-black text-white" : "bg-gray-200 text-gray-900"
                       }`}
@@ -403,12 +440,11 @@ export default function PetProfilePage() {
                   </div>
 
                   <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
-                    <b>Napomena:</b> kasnije dodajemo “Breeding profil” (pol, grad, rasa, opis…)
-                    da listing bude kvalitetan.
+                    <b>Napomena:</b> kasnije dodajemo “Breeding profil” (više detalja) da listing bude kvalitetan.
                   </div>
                 </div>
 
-                {/* Confirm modal */}
+                {/* Confirm modal (samo za paljenje LOST) */}
                 {confirmLostOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
                     <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow">
@@ -453,16 +489,12 @@ export default function PetProfilePage() {
                     <div className="font-semibold text-gray-900">Skeniranja taga</div>
                     <div className="mt-2 text-sm text-gray-800">
                       Ovde premeštamo statistiku skeniranja (ukupno, poslednje, LOST skeniranja).
-                      <br />
-                      Pošalji mi endpoint koji koristiš za scan stats i ubaciću tačno.
                     </div>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() =>
-                      alert("LOST poster: ubacićemo download action iz postojećeg koda 🙂")
-                    }
+                    onClick={() => alert("LOST poster: ubacićemo download action iz postojećeg koda 🙂")}
                     className="w-full rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
                   >
                     🖼️ Preuzmi LOST poster
