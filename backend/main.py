@@ -1395,3 +1395,39 @@ def public_breeding_list(
         )
 
     return out
+
+@app.get("/public/breeding/{pet_id}")
+def public_breeding_detail(pet_id: int, db: Session = Depends(get_db)):
+    pet = (
+        db.query(Pet)
+        .filter(
+            Pet.id == pet_id,
+            Pet.is_breeding == True,
+            Pet.status == PetStatus.ACTIVE,
+        )
+        .first()
+    )
+    if not pet:
+        raise HTTPException(status_code=404, detail="Breeding profil nije pronađen.")
+
+    owner = db.query(User).filter(User.email == pet.owner_email).first()
+
+    # bez telefona/email-a — to ostaje samo za LOST flow
+    city = owner.city if owner else None
+
+    tag_id = pet.tag.tag_id if pet.tag else None
+
+    return {
+        "pet_id": pet.id,
+        "name": pet.name,
+        "species": pet.species,
+        "sex": pet.sex,
+        "breed": pet.breed,
+        "city": city,
+        "birth_date": pet.birth_date,       # "YYYY-01-01"
+        "pedigree": pet.pedigree,           # "TRUE"/"FALSE" ili None (kako si normalizovao)
+        "is_neutered": pet.is_neutered,     # "YES"/"NO"/"UNKNOWN"
+        "notes": pet.notes,                 # opis (kasnije)
+        "tag_id": tag_id,
+        "public_url": f"/t/{tag_id}" if tag_id else None,
+    }
