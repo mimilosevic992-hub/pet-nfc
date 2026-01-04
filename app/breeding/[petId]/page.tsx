@@ -14,11 +14,13 @@ type BreedingDetail = {
   breed: string | null;
   city: string | null;
   birth_date: string | null; // "YYYY-01-01"
-  pedigree: string | null;   // "TRUE"/"FALSE"/null
+  pedigree: string | null; // "TRUE"/"FALSE"/null
   is_neutered: string | null; // "YES"/"NO"/"UNKNOWN"
   notes: string | null;
+
+  // Ne prikazujemo javno (ni tag id ni public_url)
   tag_id: string | null;
-  public_url: string | null; // "/t/<tag>"
+  public_url: string | null;
 };
 
 function prettySpecies(s: string) {
@@ -46,6 +48,15 @@ function ageFromBirthDate(birth_date: string | null) {
   if (!Number.isFinite(y)) return null;
   const now = new Date();
   return Math.max(0, now.getFullYear() - y);
+}
+function initials(name: string) {
+  const n = (name || "").trim();
+  if (!n) return "🐾";
+  return n
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
 }
 
 export default function BreedingDetailPage() {
@@ -83,15 +94,16 @@ export default function BreedingDetailPage() {
 
   const age = ageFromBirthDate(data?.birth_date ?? null);
 
+  // public-safe avatar endpoint
+  const avatar = data ? `${API_BASE}/public/pets/${data.pet_id}/avatar` : null;
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="rounded-2xl bg-white p-6 shadow">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Breeding profil
-              </h1>
+              <h1 className="text-2xl font-bold text-gray-900">Breeding profil</h1>
               <p className="mt-1 text-sm text-gray-700">
                 Detalji o ljubimcu (javno).
               </p>
@@ -115,15 +127,37 @@ export default function BreedingDetailPage() {
 
         {!loading && data && (
           <div className="rounded-2xl bg-white p-6 shadow space-y-4">
+            {/* HERO */}
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xl font-bold text-gray-900">{data.name}</div>
-                <div className="mt-1 text-sm text-gray-700">
-                  {prettySpecies(data.species)} • {prettySex(data.sex)}
-                  {data.breed ? ` • ${data.breed}` : ""}
+              <div className="flex items-start gap-4">
+                {/* AVATAR */}
+                <div className="h-24 w-24 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center">
+                  {avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatar}
+                      alt={data.name}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        // sakrij img, ostavi inicijale
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : null}
+                  <span className="text-xl font-extrabold text-gray-700">
+                    {initials(data.name)}
+                  </span>
                 </div>
-                <div className="mt-1 text-sm text-gray-600">
-                  {data.city ?? "Grad nije unet"}
+
+                <div>
+                  <div className="text-xl font-bold text-gray-900">{data.name}</div>
+                  <div className="mt-1 text-sm text-gray-700">
+                    {prettySpecies(data.species)} • {prettySex(data.sex)}
+                    {data.breed ? ` • ${data.breed}` : ""}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-600">
+                    {data.city ?? "Grad nije unet"}
+                  </div>
                 </div>
               </div>
 
@@ -132,6 +166,7 @@ export default function BreedingDetailPage() {
               </span>
             </div>
 
+            {/* INFO GRID */}
             <div className="grid gap-3 sm:grid-cols-2 text-sm">
               <div className="rounded-xl border border-gray-300 p-4">
                 <div className="text-gray-700">Starost</div>
@@ -162,25 +197,20 @@ export default function BreedingDetailPage() {
               </div>
             </div>
 
+            {/* OPIS */}
             <div className="rounded-2xl bg-gray-50 p-5">
               <div className="font-semibold text-gray-900">Opis</div>
               <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
                 {data.notes?.trim()
                   ? data.notes
-                  : "Vlasnik još nije dodao opis. (Kasnije ćemo dodati polje 'Breeding opis' u edit profila.)"}
+                  : "Vlasnik još nije dodao opis. (Kasnije dodajemo posebno polje za breeding opis.)"}
               </div>
             </div>
 
-            {data.tag_id ? (
-              <a
-                className="inline-flex rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-                href={`https://pet-nfc.vercel.app/t/${encodeURIComponent(data.tag_id)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Otvori javni profil (/t)
-              </a>
-            ) : null}
+            {/* Namerno: nema /t linka, nema tag id-a */}
+            <div className="text-xs text-gray-500">
+              Kontakt ide kroz sistem (kasnije dodajemo dugme “Pošalji poruku” ili “Zatraži kontakt”).
+            </div>
           </div>
         )}
       </div>
