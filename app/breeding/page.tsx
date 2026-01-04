@@ -12,14 +12,26 @@ type BreedingItem = {
   sex: "MALE" | "FEMALE";
   breed: string | null;
   city: string | null;
+
+  // OVO NE KORISTIMO ZA UI (ne prikazujemo tag/link javno)
   tag_id: string | null;
-  public_url: string | null; // "/t/<tag>"
+  public_url: string | null; // "/t/<tag>" (ne prikazujemo)
 };
 
 type SortKey = "NEWEST" | "NAME_ASC" | "NAME_DESC" | "CITY_ASC" | "CITY_FIRST";
 
 function norm(s: string) {
   return (s || "").trim().toLowerCase();
+}
+
+function initials(name: string) {
+  const n = (name || "").trim();
+  if (!n) return "🐾";
+  return n
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
 }
 
 export default function BreedingPage() {
@@ -76,25 +88,20 @@ export default function BreedingPage() {
       if (city !== "ALL" && (p.city ?? "").trim() !== city) return false;
 
       if (qq) {
-        const hay = `${p.name} ${p.breed ?? ""} ${p.city ?? ""} ${p.species} ${
-          p.sex
-        }`;
+        const hay = `${p.name} ${p.breed ?? ""} ${p.city ?? ""} ${p.species} ${p.sex}`;
         if (!norm(hay).includes(qq)) return false;
       }
 
       return true;
     });
 
-    // sorting
     out = [...out];
     if (sort === "NAME_ASC") {
       out.sort((a, b) => a.name.localeCompare(b.name, "sr"));
     } else if (sort === "NAME_DESC") {
       out.sort((a, b) => b.name.localeCompare(a.name, "sr"));
     } else if (sort === "CITY_ASC") {
-      out.sort((a, b) =>
-        (a.city ?? "").localeCompare(b.city ?? "", "sr")
-      );
+      out.sort((a, b) => (a.city ?? "").localeCompare(b.city ?? "", "sr"));
     } else if (sort === "CITY_FIRST") {
       out.sort((a, b) => {
         const ac = (a.city ?? "").trim();
@@ -105,8 +112,8 @@ export default function BreedingPage() {
         return ac.localeCompare(bc, "sr");
       });
     } else {
-      // NEWEST: backend već vraća najnovije prve, ali ne računamo na to
-      out.sort((a, b) => b.pet_id - a.pet_id); // ok MVP proxy
+      // NEWEST (MVP proxy)
+      out.sort((a, b) => b.pet_id - a.pet_id);
     }
 
     return out;
@@ -151,9 +158,7 @@ export default function BreedingPage() {
             </div>
           </div>
 
-          {loading && (
-            <p className="mt-4 text-sm text-gray-700">Učitavam…</p>
-          )}
+          {loading && <p className="mt-4 text-sm text-gray-700">Učitavam…</p>}
           {err && (
             <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap">
               {err}
@@ -238,9 +243,8 @@ export default function BreedingPage() {
 
               <div className="md:col-span-3 flex items-end">
                 <div className="text-sm text-gray-700">
-                  Prikazano:{" "}
-                  <b className="text-gray-900">{filtered.length}</b> /{" "}
-                  <b className="text-gray-900">{items.length}</b>
+                  Prikazano: <b className="text-gray-900">{filtered.length}</b>{" "}
+                  / <b className="text-gray-900">{items.length}</b>
                 </div>
               </div>
             </div>
@@ -261,47 +265,59 @@ export default function BreedingPage() {
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((p) => (
-                  <a
-                    key={p.pet_id}
-                    href={`/breeding/${p.pet_id}`}
-                    className="block rounded-2xl border border-gray-300 bg-white p-5 hover:bg-gray-50"
+                {filtered.map((p) => {
+                  const avatar = `${API_BASE}/public/pets/${p.pet_id}/avatar`;
+
+                  return (
+                    <a
+                      key={p.pet_id}
+                      href={`/breeding/${p.pet_id}`}
+                      className="block rounded-2xl border border-gray-300 bg-white p-5 hover:bg-gray-50"
                     >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-bold text-gray-900">{p.name}</div>
-                        <div className="text-sm text-gray-700">
-                          {p.species === "DOG" ? "Pas" : "Mačka"} •{" "}
-                          {p.sex === "MALE" ? "Mužjak" : "Ženka"}
-                          {p.breed ? ` • ${p.breed}` : ""}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          {/* AVATAR */}
+                          <div className="h-12 w-12 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={avatar}
+                              alt={p.name}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                // sakrij img, ostavi inicijale
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                            <span className="text-sm font-bold text-gray-700">
+                              {initials(p.name)}
+                            </span>
+                          </div>
+
+                          <div>
+                            <div className="font-bold text-gray-900">{p.name}</div>
+                            <div className="text-sm text-gray-700">
+                              {p.species === "DOG" ? "Pas" : "Mačka"} •{" "}
+                              {p.sex === "MALE" ? "Mužjak" : "Ženka"}
+                              {p.breed ? ` • ${p.breed}` : ""}
+                            </div>
+                            <div className="mt-1 text-sm text-gray-600">
+                              {p.city ?? "Grad nije unet"}
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-1 text-sm text-gray-600">
-                          {p.city ?? "Grad nije unet"}
-                        </div>
+
+                        <span className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">
+                          PARENJE
+                        </span>
                       </div>
 
-                      <span className="rounded-full bg-black px-3 py-1 text-xs font-bold text-white">
-                        PARENJE
-                      </span>
-                    </div>
-
-                    {p.tag_id ? (
-                      <div className="mt-3 text-sm text-gray-700">
-                        Public profil:{" "}
-                        <a
-                          className="underline"
-                          href={`https://pet-nfc.vercel.app/t/${encodeURIComponent(
-                            p.tag_id
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          /t/{p.tag_id}
-                        </a>
+                      {/* Namerno ne prikazujemo tag_id / public link */}
+                      <div className="mt-3 text-xs text-gray-500">
+                        Klikni za detalje
                       </div>
-                    ) : null}
-                  </a>
-                ))}
+                    </a>
+                  );
+                })}
               </div>
             )}
           </div>
