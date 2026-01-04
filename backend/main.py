@@ -2,10 +2,11 @@ import os
 import io
 import csv
 from datetime import date
+import base64
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Query
+from fastapi import FastAPI, Depends, HTTPException, Request, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, Field
@@ -80,6 +81,8 @@ def _auto_migrate():
             # defaults za stare redove (da ne ostane NULL)
             conn.execute(text("UPDATE pets SET sex = 'UNKNOWN' WHERE sex IS NULL"))
             conn.execute(text("UPDATE pets SET is_neutered = 'UNKNOWN' WHERE is_neutered IS NULL"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_mime VARCHAR"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_data TEXT"))
 
     except Exception as e:
         print("Auto-migrate warning:", repr(e))
@@ -680,7 +683,7 @@ def create_pet_and_assign_auth(
 # =========================
 
 @app.get("/pets/my_auth")
-def my_pets_auth(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_pets_auth(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     pets = db.query(Pet).filter(Pet.owner_email == current_user.email).all()
 
     out = []
@@ -693,6 +696,8 @@ def my_pets_auth(current_user: User = Depends(get_current_user), db: Session = D
             "status": p.status,
             "tag_id": tag.tag_id if tag else None,
             "tag_status": tag.status if tag else None,
+            "avatar_url": (str(request.base_url).rstrip("/") + f"/public/pets/{p.id}/avatar") if getattr(p, "avatar_data", None) else None,
+            "breeding": getattr(p, "is_breeding", False),
         })
     return out
 
@@ -723,6 +728,7 @@ def edit_pet_auth(
 
 @app.get("/pets/{pet_id}")
 def get_pet_detail_auth(
+    request: Request,
     pet_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -758,7 +764,64 @@ def get_pet_detail_auth(
         "breed": getattr(pet, "breed", None),
         "is_neutered": getattr(pet, "is_neutered", "UNKNOWN"),
         "notes": getattr(pet, "notes", None),
+        "avatar_url": (str(request.base_url).rstrip("/") + f"/public/pets/{pet.id}/avatar") if getattr(pet, "avatar_data", None) else None,
+        "is_breeding": getattr(pet, "is_breeding", False),
+
     }
+
+@app.post("/pets/{pet_id}/avatar_auth")
+def upload_pet_avatar_auth(
+    pet_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Fajl mora biti slika (image/*).")
+
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Prazan fajl.")
+
+    # limit (MVP): 1MB
+    if len(raw) > 1_000_000:
+        raise HTTPException(status_code=413, detail="Slika je prevelika (max 1MB).")
+
+    pet.avatar_mime = file.content_type
+    pet.avatar_data = base64.b64encode(raw).decode("ascii")
+
+    db.add(pet)
+    db.commit()
+    db.refresh(pet)
+
+    return {"ok": True, "pet_id": pet.id}
+
+
+@app.delete("/pets/{pet_id}/avatar_auth")
+def delete_pet_avatar_auth(
+    pet_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Ljubimac ne postoji.")
+    if pet.owner_email != current_user.email:
+        raise HTTPException(status_code=403, detail="Nemaš pristup ovom ljubimcu.")
+
+    pet.avatar_mime = None
+    pet.avatar_data = None
+
+    db.add(pet)
+    db.commit()
+
+    return {"ok": True, "pet_id": pet.id}
 
 
 # =========================
@@ -1431,3 +1494,17 @@ def public_breeding_detail(pet_id: int, db: Session = Depends(get_db)):
         "tag_id": tag_id,
         "public_url": f"/t/{tag_id}" if tag_id else None,
     }
+
+@app.get("/public/pets/{pet_id}/avatar")
+def public_pet_avatar(pet_id: int, db: Session = Depends(get_db)):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet or not pet.avatar_data:
+        raise HTTPException(status_code=404, detail="Avatar ne postoji.")
+
+    mime = pet.avatar_mime or "image/jpeg"
+    try:
+        raw = base64.b64decode(pet.avatar_data)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Neispravan avatar u bazi.")
+
+    return Response(content=raw, media_type=mime)

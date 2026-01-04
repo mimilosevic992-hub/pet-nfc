@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, Enum, DateTime, func, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Enum, DateTime, func, ForeignKey, Boolean, Text
 from sqlalchemy.orm import relationship
 from db import Base
 
@@ -57,6 +57,9 @@ class Pet(Base):
     owner_email = Column(String, nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    avatar_mime = Column(String, nullable=True)  # npr "image/jpeg"
+    avatar_data = Column(Text, nullable=True)    # base64 string
 
 class OwnerProfile(Base):
     __tablename__ = "owner_profiles"
