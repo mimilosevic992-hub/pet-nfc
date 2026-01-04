@@ -1304,15 +1304,26 @@ def tag_state(tag_id: str, db: Session = Depends(get_db)):
     pet = db.query(Pet).filter(Pet.tag_id == tag.id).first()
     if not pet:
         # sigurnosna mreža (ako je stanje nekonzistentno)
-        return {"state": "UNKNOWN", "message": "Tag je u sistemu, ali nije vezan za ljubimca."}
+        return {
+            "state": "UNKNOWN",
+            "message": "Tag je u sistemu, ali nije vezan za ljubimca.",
+        }
 
     # vlasnik (kontakt) iz users tabele (po email-u)
     owner = db.query(User).filter(User.email == pet.owner_email).first()
 
+    # zajednički pet payload (u oba stanja)
+    pet_payload = {
+        "name": pet.name,
+        "species": pet.species,
+        "status": str(pet.status),  # "ACTIVE" / "LOST" / "DECEASED"
+    }
+
     if pet.status == PetStatus.LOST:
         return {
             "state": "LOST",
-            "pet": {"name": pet.name, "species": pet.species},
+            "pet_id": pet.id,          # ✅ bitno za avatar
+            "pet": pet_payload,
             "contact": {
                 "owner_email": owner.email if owner else pet.owner_email,
                 "phone": owner.phone if owner else None,
@@ -1323,7 +1334,8 @@ def tag_state(tag_id: str, db: Session = Depends(get_db)):
 
     return {
         "state": "SAFE",
-        "pet": {"name": pet.name, "species": pet.species},
+        "pet_id": pet.id,            # ✅ bitno za avatar
+        "pet": pet_payload,
         "message": "Ljubimac nije prijavljen kao izgubljen.",
     }
 
