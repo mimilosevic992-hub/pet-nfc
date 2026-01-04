@@ -17,6 +17,9 @@ type PetDetail = {
   status: "ACTIVE" | "LOST" | "DECEASED";
   tag_id: string | null;
   tag_status: string | null;
+  is_breeding?: boolean;
+  sex?: "MALE" | "FEMALE";
+  breed?: string | null;
 };
 
 function initials(name: string) {
@@ -72,6 +75,7 @@ export default function PetProfilePage() {
 
       const data = JSON.parse(text) as PetDetail;
       setPet(data);
+      setBreedingOn(Boolean((data as any).is_breeding));
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
     } finally {
@@ -107,14 +111,27 @@ export default function PetProfilePage() {
     }
   }
 
-  async function toggleBreeding(next: boolean) {
+  async function toggleBreeding() {
     setErr(null);
     setMsg(null);
 
     try {
-      // TODO: uveži sa backendom kada bude spremno
-      setBreedingOn(next);
-      setMsg(next ? "Status parenja uključen" : "Status parenja isključen");
+      const token = localStorage.getItem("petnfc_token");
+      if (!token) throw new Error("Nisi ulogovan.");
+      if (!pet) throw new Error("Nema podataka o ljubimcu.");
+
+      const res = await fetch(`${API_BASE}/pets/${pet.pet_id}/breeding_auth`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+
+      const data = JSON.parse(text) as { pet_id: number; is_breeding: boolean };
+
+      setBreedingOn(Boolean(data.is_breeding));
+      setMsg(data.is_breeding ? "Status parenja uključen" : "Status parenja isključen");
     } catch (e: any) {
       setErr(e?.message ?? "Greška");
     }
@@ -376,7 +393,7 @@ export default function PetProfilePage() {
 
                     <button
                       type="button"
-                      onClick={() => toggleBreeding(!breedingOn)}
+                      onClick={() => toggleBreeding()}
                       className={`rounded-full px-4 py-2 text-sm font-bold ${
                         breedingOn ? "bg-black text-white" : "bg-gray-200 text-gray-900"
                       }`}

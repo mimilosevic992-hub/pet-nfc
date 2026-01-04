@@ -3,7 +3,7 @@ import io
 import csv
 from datetime import date
 
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -1354,3 +1354,44 @@ def scan_history_auth(
         }
         for s in scans
     ]
+
+@app.get("/public/breeding")
+def public_breeding_list(
+    limit: int = Query(30, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Public lista ljubimaca za parenje (bez auth).
+    Ne vraćamo phone/email – samo ono što treba za listing.
+    """
+
+    pets = (
+        db.query(Pet)
+        .filter(
+            Pet.is_breeding == True,
+            Pet.status == PetStatus.ACTIVE,
+        )
+        .order_by(Pet.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    out = []
+    for p in pets:
+        owner = db.query(User).filter(User.email == p.owner_email).first()
+        city = (owner.city if owner else None)
+
+        out.append(
+            {
+                "pet_id": p.id,
+                "name": p.name,
+                "species": p.species,
+                "sex": p.sex,            # MALE/FEMALE
+                "breed": p.breed,        # može None
+                "city": city,            # može None
+                "tag_id": p.tag.tag_id if p.tag else None,
+                "public_url": f"/t/{p.tag.tag_id}" if p.tag else None,
+            }
+        )
+
+    return out
